@@ -192,7 +192,7 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Cantidad *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap">Cantidad *</label>
             <div className="relative group">
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
                 <input
@@ -206,7 +206,7 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Total Recibido *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap">Total Recibido *</label>
             <div className="relative group">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
                 <input
