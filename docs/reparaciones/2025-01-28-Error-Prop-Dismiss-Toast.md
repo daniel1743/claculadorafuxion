@@ -66,3 +66,4 @@ const { data: existing, error: checkError } = await supabase
 - ✅ La verificación de precios existentes funciona correctamente
 - ✅ No hay errores de sintaxis
 
+
