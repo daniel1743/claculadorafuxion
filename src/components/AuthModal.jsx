@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { signUp, signIn, getUserProfile } from '@/lib/supabaseService';
+import { signUp, signIn, getUserProfile, createUserProfile } from '@/lib/supabaseService';
 
 const AuthModal = ({ isOpen, onLogin }) => {
   const { toast } = useToast();
@@ -40,15 +40,28 @@ const AuthModal = ({ isOpen, onLogin }) => {
       if (isRegistering) {
         // Registro de nuevo usuario
         const { data, error } = await signUp(formData.email, formData.password, formData.name);
-        
+
         if (error) {
           throw error;
         }
 
         if (data?.user) {
-          // Obtener el perfil del usuario
-          const { data: profileData, error: profileError } = await getUserProfile(data.user.id);
-          
+          // Intentar obtener el perfil del usuario
+          let { data: profileData } = await getUserProfile(data.user.id);
+
+          // Si no existe el perfil, crearlo
+          if (!profileData) {
+            const { data: newProfile, error: createError } = await createUserProfile(
+              data.user.id,
+              formData.name,
+              data.user.email
+            );
+
+            if (!createError && newProfile) {
+              profileData = newProfile;
+            }
+          }
+
           const user = {
             id: data.user.id,
             email: data.user.email,

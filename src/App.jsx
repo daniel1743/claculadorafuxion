@@ -6,6 +6,8 @@ import { LayoutDashboard, Receipt, Megaphone, ShoppingCart } from 'lucide-react'
 import PurchaseModule from '@/components/PurchaseModule';
 import AdModule from '@/components/AdModule';
 import SalesModule from '@/components/SalesModule';
+import ExitModule from '@/components/ExitModule';
+import BoxOpeningModule from '@/components/BoxOpeningModule';
 import PriceManagement from '@/components/PriceManagement';
 import KPIGrid from '@/components/KPIGrid';
 import ChartsSection from '@/components/ChartsSection';
@@ -14,7 +16,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthModal from '@/components/AuthModal';
 import UserProfile from '@/components/UserProfile';
-import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile } from '@/lib/supabaseService';
+import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
+import { getTransactionsV2 } from '@/lib/transactionServiceV2';
+import { getUserProductsWithInventory } from '@/lib/productService';
 import { useToast } from '@/components/ui/use-toast';
 
 function App() {
@@ -22,6 +26,7 @@ function App() {
   const [transactions, setTransactions] = useState([]);
   const [inventoryMap, setInventoryMap] = useState({});
   const [prices, setPrices] = useState({});
+  const [products, setProducts] = useState([]); // Productos V2 con PPP e inventario
   const [campaigns, setCampaigns] = useState([]);
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -34,22 +39,43 @@ function App() {
     try {
       setLoading(true);
       
-      // Cargar transacciones
-      const { data: transactionsData, error: transactionsError } = await getTransactions(userId);
-      if (transactionsError) throw transactionsError;
-      
-      if (transactionsData) {
-        setTransactions(transactionsData);
-        recalculateInventory(transactionsData);
-        extractCampaigns(transactionsData);
+      // Cargar transacciones V2 (con productos)
+      const { data: transactionsDataV2, error: transactionsErrorV2 } = await getTransactionsV2(userId);
+      if (transactionsErrorV2) {
+        // Fallback a método antiguo si V2 falla
+        const { data: transactionsData, error: transactionsError } = await getTransactions(userId);
+        if (transactionsError) throw transactionsError;
+        if (transactionsData) {
+          setTransactions(transactionsData);
+          recalculateInventory(transactionsData);
+          extractCampaigns(transactionsData);
+        }
+      } else {
+        if (transactionsDataV2) {
+          setTransactions(transactionsDataV2);
+          recalculateInventory(transactionsDataV2);
+          extractCampaigns(transactionsDataV2);
+        }
       }
 
-      // Cargar precios
+      // Cargar productos V2 (con PPP e inventario)
+      const { data: productsData, error: productsError } = await getUserProductsWithInventory(userId);
+      if (!productsError && productsData) {
+        setProducts(productsData);
+        // Actualizar precios desde productos
+        const pricesFromProducts = {};
+        productsData.forEach(p => {
+          if (p.listPrice > 0) {
+            pricesFromProducts[p.name] = p.listPrice;
+          }
+        });
+        setPrices(prev => ({ ...prev, ...pricesFromProducts }));
+      }
+
+      // Cargar precios (compatibilidad con sistema antiguo)
       const { data: pricesData, error: pricesError } = await getPrices(userId);
-      if (pricesError) throw pricesError;
-      
-      if (pricesData) {
-        setPrices(pricesData);
+      if (!pricesError && pricesData) {
+        setPrices(prev => ({ ...prev, ...pricesData }));
       }
     } catch (error) {
       console.error('Error cargando datos del usuario:', error);
@@ -77,8 +103,18 @@ function App() {
         }
 
         // Obtener perfil del usuario
-        const { data: profileData } = await getUserProfile(currentUser.id);
-        
+        let { data: profileData } = await getUserProfile(currentUser.id);
+
+        // Si no existe el perfil, crearlo
+        if (!profileData) {
+          const { data: newProfile } = await createUserProfile(
+            currentUser.id,
+            currentUser.email?.split('@')[0] || 'Usuario',
+            currentUser.email
+          );
+          profileData = newProfile;
+        }
+
         const userData = {
           id: currentUser.id,
           email: currentUser.email,
@@ -108,8 +144,18 @@ function App() {
         setCampaigns([]);
         setAuthModalOpen(true);
       } else if (event === 'SIGNED_IN' && session.user) {
-        const { data: profileData } = await getUserProfile(session.user.id);
-        
+        let { data: profileData } = await getUserProfile(session.user.id);
+
+        // Si no existe el perfil, crearlo
+        if (!profileData) {
+          const { data: newProfile } = await createUserProfile(
+            session.user.id,
+            session.user.email?.split('@')[0] || 'Usuario',
+            session.user.email
+          );
+          profileData = newProfile;
+        }
+
         const userData = {
           id: session.user.id,
           email: session.user.email,
@@ -126,6 +172,17 @@ function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Recargar productos cuando cambian las transacciones
+  useEffect(() => {
+    if (user) {
+      const reloadProducts = async () => {
+        const { data } = await getUserProductsWithInventory(user.id);
+        if (data) setProducts(data);
+      };
+      reloadProducts();
+    }
+  }, [transactions.length, user]);
 
   const recalculateInventory = (txns) => {
     const map = {};
@@ -156,22 +213,37 @@ function App() {
     if (!user) return;
 
     const list = Array.isArray(newTxns) ? newTxns : [newTxns];
-    const timestamp = Date.now();
-    const processed = list.map((t, i) => ({
-      ...t,
-      id: t.id || `${timestamp}-${i}-${Math.random().toString(36).substr(2, 9)}`
-    }));
-
+    
     try {
-      const { data: addedTransactions, error } = await addMultipleTransactions(processed);
-      
-      if (error) throw error;
-
-      if (addedTransactions) {
-        const updatedTransactions = [...transactions, ...addedTransactions];
+      // Si las transacciones vienen del nuevo sistema (tienen productId), ya están guardadas
+      // Solo actualizar estado local
+      if (list.length > 0 && list[0].productId) {
+        const updatedTransactions = [...transactions, ...list];
         setTransactions(updatedTransactions);
         recalculateInventory(updatedTransactions);
         extractCampaigns(updatedTransactions);
+        
+        // Recargar productos para actualizar inventario
+        const { data: productsData } = await getUserProductsWithInventory(user.id);
+        if (productsData) setProducts(productsData);
+      } else {
+        // Fallback: usar método antiguo para compatibilidad
+        const timestamp = Date.now();
+        const processed = list.map((t, i) => ({
+          ...t,
+          id: t.id || `${timestamp}-${i}-${Math.random().toString(36).substr(2, 9)}`
+        }));
+
+        const { data: addedTransactions, error } = await addMultipleTransactions(processed);
+        
+        if (error) throw error;
+
+        if (addedTransactions) {
+          const updatedTransactions = [...transactions, ...addedTransactions];
+          setTransactions(updatedTransactions);
+          recalculateInventory(updatedTransactions);
+          extractCampaigns(updatedTransactions);
+        }
       }
     } catch (error) {
       console.error('Error agregando transacción:', error);
@@ -400,7 +472,7 @@ function App() {
 
             {/* 2. KPI Cards Grid */}
             <section>
-                <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} />
+                <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} products={products} />
             </section>
 
             {/* 3. Charts Section */}
@@ -425,6 +497,9 @@ function App() {
                     </TabsTrigger>
                     <TabsTrigger value="ventas" className="rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
                         Ventas
+                    </TabsTrigger>
+                    <TabsTrigger value="salidas" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
+                        Salidas
                     </TabsTrigger>
                     <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-6 py-2 transition-all">
                         Precios
@@ -467,7 +542,7 @@ function App() {
                               inventoryMap={inventoryMap} 
                               campaigns={campaigns} 
                               prices={prices}
-                              products={Array.from(new Set(transactions.map(t => t.productName).filter(Boolean)))}
+                              products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                             />
                         </div>
                         <div className="lg:col-span-2">
@@ -476,14 +551,40 @@ function App() {
                     </div>
                     </TabsContent>
 
+                    <TabsContent value="salidas" className="mt-0 focus-visible:outline-none">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-1">
+                            <ExitModule 
+                              onAdd={handleAddTransaction} 
+                              campaigns={campaigns} 
+                              prices={prices}
+                              products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
+                            />
+                        </div>
+                        <div className="lg:col-span-2">
+                            <DataTable typeFilter="sale" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Salidas" icon={Receipt} color="blue" />
+                        </div>
+                    </div>
+                    </TabsContent>
+
                     <TabsContent value="precios" className="mt-0 focus-visible:outline-none">
-                        <PriceManagement 
-                            transactions={transactions} 
-                            prices={prices} 
-                            onUpdatePrice={handleUpdatePrice} 
-                            onDeleteProduct={handleDeleteProduct}
-                            onRenameProduct={handleRenameProduct}
-                        />
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="lg:col-span-2">
+                                <PriceManagement 
+                                    transactions={transactions} 
+                                    prices={prices} 
+                                    onUpdatePrice={handleUpdatePrice} 
+                                    onDeleteProduct={handleDeleteProduct}
+                                    onRenameProduct={handleRenameProduct}
+                                />
+                            </div>
+                            <div className="lg:col-span-1">
+                                <BoxOpeningModule 
+                                    onAdd={handleAddTransaction}
+                                    products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
+                                />
+                            </div>
+                        </div>
                     </TabsContent>
                 </div>
                 </Tabs>

@@ -5,6 +5,8 @@ import { Plus, AlertCircle, PackagePlus, Tag, Hash, DollarSign, FileText, Layers
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import { addTransactionV2 } from '@/lib/transactionServiceV2';
+import { getProductByName, upsertProduct } from '@/lib/productService';
 
 const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
   const { toast } = useToast();
@@ -34,7 +36,7 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     });
   }, [formData.quantity, formData.totalSpent]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.productName || !formData.quantity || !formData.totalSpent) {
       toast({
@@ -49,65 +51,79 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     const totalSpent = parseFloat(formData.totalSpent);
     const tagsList = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
 
-    let transactionsToAdd = [];
+    try {
+      let transactionsToAdd = [];
 
-    if (tagsList.length > 0) {
-      // Split logic
-      const baseQty = Math.floor(totalQty / tagsList.length);
-      const remainder = totalQty % tagsList.length;
-      const costPerUnit = totalSpent / totalQty;
+      if (tagsList.length > 0) {
+        // Split logic
+        const baseQty = Math.floor(totalQty / tagsList.length);
+        const remainder = totalQty % tagsList.length;
+        const costPerUnit = totalSpent / totalQty;
 
-      tagsList.forEach((tag, index) => {
-        // Distribute quantity
-        let qty = baseQty;
-        if (index < remainder) qty += 1;
+        for (const tag of tagsList) {
+          let qty = baseQty;
+          if (tagsList.indexOf(tag) < remainder) qty += 1;
 
-        if (qty > 0) {
-          const cost = qty * costPerUnit;
-          const free = Math.floor(qty / 4);
-          const realCost = cost / (qty + free);
+          if (qty > 0) {
+            const cost = qty * costPerUnit;
+            const listPrice = prices[tag] || prices[formData.productName] || 0;
 
-          transactionsToAdd.push({
-            type: 'compra',
-            productName: tag, // Tag becomes the main identifier
-            description: `${formData.productName} ${formData.description}`.trim(),
-            quantity: qty,
-            total: cost,
-            freeUnits: free,
-            realUnitCost: realCost,
-            date: new Date().toISOString()
-          });
+            const result = await addTransactionV2({
+              type: 'purchase',
+              productName: tag,
+              quantityBoxes: qty,
+              quantitySachets: 0,
+              totalAmount: cost,
+              notes: `${formData.productName} ${formData.description}`.trim(),
+              listPrice: listPrice
+            });
+
+            if (result.error) throw result.error;
+            if (result.data) transactionsToAdd.push(result.data);
+          }
         }
-      });
 
+        toast({
+          title: "Compra Desglosada",
+          description: `Se crearon ${transactionsToAdd.length} registros basados en las etiquetas.`,
+          className: "bg-red-900 border-red-600 text-white"
+        });
+
+      } else {
+        // Single entry
+        const listPrice = prices[formData.productName] || 0;
+
+        const result = await addTransactionV2({
+          type: 'purchase',
+          productName: formData.productName,
+          quantityBoxes: totalQty,
+          quantitySachets: 0,
+          totalAmount: totalSpent,
+          notes: formData.description,
+          listPrice: listPrice
+        });
+
+        if (result.error) throw result.error;
+        if (result.data) transactionsToAdd.push(result.data);
+
+        toast({
+          title: "Compra Exitosa",
+          description: "Inventario y PPP actualizados automáticamente.",
+          className: "bg-red-900 border-red-600 text-white"
+        });
+      }
+
+      // Notificar al componente padre
+      onAdd(transactionsToAdd);
+      setFormData({ productName: '', description: '', tags: '', quantity: '', totalSpent: '' });
+    } catch (error) {
+      console.error('Error en handleSubmit:', error);
       toast({
-        title: "Compra Desglosada",
-        description: `Se crearon ${transactionsToAdd.length} registros basados en las etiquetas.`,
-        className: "bg-red-900 border-red-600 text-white"
-      });
-
-    } else {
-      // Single entry
-      transactionsToAdd.push({
-        type: 'compra',
-        productName: formData.productName,
-        description: formData.description,
-        quantity: totalQty,
-        total: totalSpent,
-        freeUnits: calculations.freeProducts,
-        realUnitCost: calculations.realUnitCost,
-        date: new Date().toISOString()
-      });
-
-      toast({
-        title: "Compra Exitosa",
-        description: "Inventario actualizado correctamente.",
-        className: "bg-red-900 border-red-600 text-white"
+        title: "Error",
+        description: error.message || "No se pudo registrar la compra. Intenta de nuevo.",
+        variant: "destructive"
       });
     }
-
-    onAdd(transactionsToAdd);
-    setFormData({ productName: '', description: '', tags: '', quantity: '', totalSpent: '' });
   };
 
   return (

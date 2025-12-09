@@ -1,11 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Tag, DollarSign, Search, AlertCircle, Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Tag, DollarSign, Search, AlertCircle, Plus, Pencil, Trash2, AlertTriangle, Package, Gift, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { formatCLP } from '@/lib/utils';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import { getUserProductsWithInventory, upsertProduct } from '@/lib/productService';
+import { formatInventory } from '@/lib/inventoryUtils';
+import { supabase } from '@/lib/supabase';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +21,7 @@ import {
 const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct, onRenameProduct }) => {
   const { toast } = useToast();
   const [products, setProducts] = useState([]);
+  const [productsV2, setProductsV2] = useState([]); // Productos con PPP e inventario
   const [searchTerm, setSearchTerm] = useState('');
   
   // Modal States
@@ -26,33 +30,53 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
   const [isEditMode, setIsEditMode] = useState(false);
   
   // Form Data
-  const [formData, setFormData] = useState({ name: '', price: '' });
+  const [formData, setFormData] = useState({ name: '', price: '', points: '' });
   const [editingProduct, setEditingProduct] = useState(null); // Original name before edit
   const [deletingProduct, setDeletingProduct] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Cargar productos V2 con PPP e inventario
   useEffect(() => {
-    const uniqueProducts = new Set();
-    // From history
-    transactions.forEach(t => {
-      if (t.productName) uniqueProducts.add(t.productName);
-    });
-    // From prices list
-    Object.keys(prices).forEach(p => uniqueProducts.add(p));
-
-    setProducts(Array.from(uniqueProducts).sort());
+    const loadProducts = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await getUserProductsWithInventory(user.id);
+          if (data) {
+            setProductsV2(data);
+            // También mantener lista simple para compatibilidad
+            setProducts(data.map(p => p.name).sort());
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando productos:', error);
+        // Fallback a lista simple
+        const uniqueProducts = new Set();
+        transactions.forEach(t => {
+          if (t.productName) uniqueProducts.add(t.productName);
+        });
+        Object.keys(prices).forEach(p => uniqueProducts.add(p));
+        setProducts(Array.from(uniqueProducts).sort());
+      }
+    };
+    loadProducts();
   }, [transactions, prices]);
 
   // Handlers
   const openAddModal = () => {
-    setFormData({ name: '', price: '' });
+    setFormData({ name: '', price: '', points: '' });
     setIsEditMode(false);
     setEditingProduct(null);
     setIsFormOpen(true);
   };
 
   const openEditModal = (product, currentPrice) => {
-    setFormData({ name: product, price: currentPrice });
+    const productV2 = productsV2.find(p => p.name === product);
+    setFormData({ 
+      name: product, 
+      price: currentPrice,
+      points: productV2?.points || 0
+    });
     setIsEditMode(true);
     setEditingProduct(product);
     setIsFormOpen(true);
@@ -67,11 +91,12 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
     e.preventDefault();
     const name = formData.name.trim();
     const price = parseFloat(formData.price);
+    const points = parseInt(formData.points) || 0;
 
-    if (!name || isNaN(price) || price <= 0) {
+    if (!name || isNaN(price) || price < 0) {
         toast({
             title: "Datos Inválidos",
-            description: "Por favor ingresa un nombre y un precio válido mayor a 0.",
+            description: "Por favor ingresa un nombre y un precio válido (mayor o igual a 0).",
             variant: "destructive"
         });
         return;
@@ -82,23 +107,43 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
     try {
       console.log(`[PriceManagement] Guardando precio: "${name}" = $${price}`);
 
+      // Usar productService para crear/actualizar producto con puntos
+      const result = await upsertProduct({
+        name: name,
+        list_price: price,
+        points: points
+      });
+
+      if (result.error) throw result.error;
+
       if (isEditMode) {
           console.log(`[PriceManagement] Modo EDICIÓN - producto original: "${editingProduct}"`);
-          // Rename or Price Update logic handled in App
-          await onRenameProduct(editingProduct, name, price);
+          // Si cambió el nombre, usar función de renombrar
+          if (editingProduct !== name) {
+            await onRenameProduct(editingProduct, name, price);
+          } else {
+            // Solo actualizar precio si no cambió el nombre
+            await onUpdatePrice(name, price);
+          }
       } else {
-          console.log('[PriceManagement] Modo NUEVO - agregando precio');
-          // Add New - esperar a que termine la operación
+          console.log('[PriceManagement] Modo NUEVO - agregando producto');
           await onUpdatePrice(name, price);
-          console.log('[PriceManagement] Precio guardado exitosamente');
+          console.log('[PriceManagement] Producto guardado exitosamente');
           toast({
               title: "✅ Producto Agregado",
-              description: `Se agregó "${name}" con precio ${formatCLP(price)}.`,
+              description: `Se agregó "${name}" con precio ${formatCLP(price)}${points > 0 ? ` y ${points} puntos` : ''}.`,
               className: "bg-green-900 border-green-600 text-white"
           });
       }
       setIsFormOpen(false);
-      setFormData({ name: '', price: '' });
+      setFormData({ name: '', price: '', points: '' });
+      
+      // Recargar productos
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await getUserProductsWithInventory(user.id);
+        if (data) setProductsV2(data);
+      }
     } catch (error) {
       console.error('[PriceManagement] Error guardando producto:', error);
 
@@ -180,30 +225,46 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
         <table className="w-full text-sm text-left">
           <thead className="text-xs uppercase bg-white/5 text-gray-400">
             <tr>
-              <th className="px-6 py-4 font-medium tracking-wider">Producto / Etiqueta</th>
-              <th className="px-6 py-4 font-medium tracking-wider text-right">Precio Unitario</th>
+              <th className="px-6 py-4 font-medium tracking-wider">Producto</th>
+              <th className="px-6 py-4 font-medium tracking-wider text-right">Precio Venta</th>
+              <th className="px-6 py-4 font-medium tracking-wider text-right">PPP</th>
+              <th className="px-6 py-4 font-medium tracking-wider text-right">Inventario</th>
+              <th className="px-6 py-4 font-medium tracking-wider text-right">Puntos</th>
               <th className="px-6 py-4 font-medium tracking-wider text-center">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => {
-                const currentPrice = prices[product] || 0;
+              filteredProducts.map((productName) => {
+                const currentPrice = prices[productName] || 0;
+                const productV2 = productsV2.find(p => p.name === productName);
                 
                 return (
-                  <tr key={product} className="hover:bg-white/5 transition-colors group">
+                  <tr key={productName} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4 font-medium text-white">
-                      {product}
+                      {productName}
                     </td>
                     <td className="px-6 py-4 text-right text-green-400 font-mono font-bold">
                       {formatCLP(currentPrice)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-blue-400 font-mono text-sm">
+                      {productV2?.weightedAverageCost > 0 
+                        ? formatCLP(productV2.weightedAverageCost)
+                        : <span className="text-gray-500">-</span>
+                      }
+                    </td>
+                    <td className="px-6 py-4 text-right text-gray-300 text-xs">
+                      {productV2 ? formatInventory(productV2) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right text-purple-400 font-semibold">
+                      {productV2?.points > 0 ? productV2.points : '-'}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => openEditModal(product, currentPrice)}
+                            onClick={() => openEditModal(productName, currentPrice)}
                             className="h-8 w-8 p-0 text-gray-400 hover:text-yellow-500 hover:bg-yellow-500/10"
                             title="Editar"
                           >
@@ -212,7 +273,7 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => openDeleteModal(product)}
+                            onClick={() => openDeleteModal(productName)}
                             className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-500/10"
                             title="Eliminar"
                           >
@@ -225,7 +286,7 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
               })
             ) : (
               <tr>
-                <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <AlertCircle className="w-6 h-6 opacity-50" />
                     <p>No se encontraron productos.</p>
@@ -250,7 +311,7 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
         if (!open) {
           // Limpiar el formulario al cerrar
           setTimeout(() => {
-            setFormData({ name: '', price: '' });
+            setFormData({ name: '', price: '', points: '' });
             setIsEditMode(false);
             setEditingProduct(null);
           }, 150);
@@ -292,6 +353,20 @@ const PriceManagement = ({ transactions, prices, onUpdatePrice, onDeleteProduct,
                             min="0"
                             value={formData.price}
                             onChange={(e) => setFormData({...formData, price: e.target.value})}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-2 focus:ring-yellow-500/50 outline-none"
+                            placeholder="0"
+                        />
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <label className="text-xs uppercase font-bold text-gray-500">Puntos Fuxion (por caja)</label>
+                    <div className="relative">
+                         <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                         <input 
+                            type="number"
+                            min="0"
+                            value={formData.points}
+                            onChange={(e) => setFormData({...formData, points: e.target.value})}
                             className="w-full bg-black/40 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-2 focus:ring-yellow-500/50 outline-none"
                             placeholder="0"
                         />

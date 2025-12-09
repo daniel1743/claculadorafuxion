@@ -67,3 +67,4 @@ const { data: existing, error: checkError } = await supabase
 - ✅ No hay errores de sintaxis
 
 
+

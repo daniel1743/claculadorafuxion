@@ -519,12 +519,41 @@ export const getUserProfile = async (userId) => {
       .from('profiles')
       .select('*')
       .eq('id', userId)
+      .maybeSingle(); // Usar maybeSingle() para evitar error si no existe
+
+    // Si no existe el perfil, no es un error - simplemente no hay datos
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error en getUserProfile:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Crea un perfil de usuario si no existe
+ */
+export const createUserProfile = async (userId, name, email) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        name: name || email?.split('@')[0] || 'Usuario',
+        email: email,
+        avatar_url: null,
+        updated_at: new Date().toISOString()
+      })
+      .select()
       .single();
 
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
-    console.error('Error en getUserProfile:', error);
+    console.error('Error en createUserProfile:', error);
     return { data: null, error };
   }
 };

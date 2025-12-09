@@ -4,8 +4,9 @@ import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, 
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
+import { calculateTotalProfit, calculateInventoryValue } from '@/lib/accountingUtils';
 
-const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
+const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedKPI, setSelectedKPI] = useState({ type: '', title: '', color: '' });
 
@@ -62,7 +63,18 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
       }
     });
 
-    const netProfit = totalSales - (totalPurchases + totalAds);
+    // Calcular ganancia real usando COGS (solo si tenemos productos con PPP)
+    let netProfit, totalCOGS = 0;
+    if (products && products.length > 0) {
+      // Usar cálculo real con COGS
+      const profitData = calculateTotalProfit(transactions, products);
+      netProfit = profitData.totalProfit;
+      totalCOGS = profitData.totalCOGS;
+    } else {
+      // Fallback al cálculo antiguo si no hay productos
+      netProfit = totalSales - (totalPurchases + totalAds);
+    }
+    
     const avgRealCost = totalUnitsAcquired > 0 ? weightedCostSum / totalUnitsAcquired : 0;
     
     // Calculate Free Product Profit using STORED PRICES
@@ -73,14 +85,20 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
     // OR if the user provided prices, we use the Weighted Average Price of current inventory?
     // Let's stick to: Total Free Units * Average Stored Price (or Avg Sales Price if no stored price)
     
-    // Calculate total value of current inventory based on stored prices
+    // Calculate total value of current inventory
+    // Si tenemos productos con PPP, usar PPP; si no, usar precios de venta
     let totalInventoryValue = 0;
-    Object.entries(inventoryMap).forEach(([name, qty]) => {
-       if (qty > 0) {
+    if (products && products.length > 0) {
+      totalInventoryValue = calculateInventoryValue(products);
+    } else {
+      // Fallback: usar precios de venta
+      Object.entries(inventoryMap).forEach(([name, qty]) => {
+        if (qty > 0) {
           const price = prices[name] || 0;
           totalInventoryValue += (qty * price);
-       }
-    });
+        }
+      });
+    }
 
     const totalUnitsSold = transactions.filter(t => t.type === 'venta').reduce((acc, curr) => acc + curr.quantity, 0);
     const avgSalePrice = totalUnitsSold > 0 ? totalSales / totalUnitsSold : 0;
@@ -140,6 +158,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
       totalPurchases,
       totalSales,
       netProfit,
+      totalCOGS,
       transactionCount,
       freeProducts,
       freeProductProfit: freeValueCalc,
@@ -150,7 +169,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
       productList,
       profitPreview
     };
-  }, [transactions, inventoryMap, prices]);
+  }, [transactions, inventoryMap, prices, products]);
 
   return (
     <>
@@ -192,7 +211,10 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices }) => {
           trend={metrics.netProfit >= 0 ? "Rentabilidad Positiva" : "Rentabilidad Negativa"}
           color={metrics.netProfit >= 0 ? "gold" : "red"}
           delay={0.15}
-          hoverData={metrics.profitPreview}
+          hoverData={[
+            ...metrics.profitPreview,
+            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : [])
+          ]}
           onClick={() => handleCardClick('profit', 'Desglose de Ganancias', 'gold')}
         />
          <MetricCard
