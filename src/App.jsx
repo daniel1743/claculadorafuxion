@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { LayoutDashboard, Receipt, Megaphone, ShoppingCart } from 'lucide-react';
 import PurchaseModule from '@/components/PurchaseModule';
 import AdModule from '@/components/AdModule';
-import SalesModule from '@/components/SalesModule';
+import SalesModule from '@/components/SalesModuleWithCart';
 import ExitModule from '@/components/ExitModule';
 import BoxOpeningModule from '@/components/BoxOpeningModule';
 import PriceManagement from '@/components/PriceManagement';
