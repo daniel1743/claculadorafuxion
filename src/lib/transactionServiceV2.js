@@ -86,7 +86,7 @@ export const addTransactionV2 = async (transaction) => {
     } = transaction;
 
     // Validar tipo de transacción
-    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening'];
+    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening', 'loan_repayment', 'loan'];
     if (!validTypes.includes(type)) {
       throw new Error(`Tipo de transacción inválido: ${type}. Debe ser uno de: ${validTypes.join(', ')}`);
     }

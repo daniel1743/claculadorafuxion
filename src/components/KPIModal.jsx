@@ -10,7 +10,7 @@ import {
 import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock } from 'lucide-react';
 import { formatCLP } from '@/lib/utils';
 
-const KPIModal = ({ isOpen, onClose, type, transactions, title, color }) => {
+const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [] }) => {
   
   const modalData = useMemo(() => {
     if (!transactions) return { rows: [], summary: {} };
@@ -84,9 +84,34 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color }) => {
         rows = transactions.filter(t => t.type === filterType).sort((a,b) => new Date(b.date) - new Date(a.date));
         summary = { count: rows.length, total: rows.reduce((a,b)=>a+b.total, 0) };
     }
+    else if (type === 'loans') {
+        // Agregar préstamos por producto
+        const loanMap = {};
+        loans.forEach(loan => {
+            const key = loan.productName;
+            if (!loanMap[key]) {
+                loanMap[key] = {
+                    productName: loan.productName,
+                    totalBoxes: 0,
+                    totalSachets: 0,
+                    listPrice: loan.listPrice || 0,
+                    lastUpdate: loan.createdAt
+                };
+            }
+            loanMap[key].totalBoxes += loan.quantityBoxes || 0;
+            loanMap[key].totalSachets += loan.quantitySachets || 0;
+            if (new Date(loan.createdAt) > new Date(loanMap[key].lastUpdate)) {
+                loanMap[key].lastUpdate = loan.createdAt;
+            }
+        });
+        rows = Object.values(loanMap);
+        const totalBoxes = rows.reduce((a, b) => a + b.totalBoxes, 0);
+        const totalValue = rows.reduce((a, b) => a + (b.totalBoxes * b.listPrice), 0);
+        summary = { totalProducts: rows.length, totalBoxes, totalValue };
+    }
 
     return { rows, summary };
-  }, [type, transactions]);
+  }, [type, transactions, loans]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

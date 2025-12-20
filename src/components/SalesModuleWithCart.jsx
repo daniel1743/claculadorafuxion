@@ -4,6 +4,8 @@ import { Plus, Tag, Hash, DollarSign, Link2, FileText, ShoppingCart, Trash2, X }
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import { createLoan } from '@/lib/loanService';
+import { addTransactionV2 } from '@/lib/transactionServiceV2';
 
 const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) => {
   const { toast } = useToast();
@@ -71,18 +73,18 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
       return;
     }
 
-    // Verificar stock disponible
+    // Verificar stock disponible (solo warning, no bloquear)
     const available = inventoryMap[formData.productName] || 0;
     const alreadyInCart = cart.find(item => item.productName === formData.productName)?.quantity || 0;
     const totalNeeded = qty + alreadyInCart;
 
     if (totalNeeded > available) {
+      const shortage = totalNeeded - available;
       toast({
         title: "Stock Insuficiente",
-        description: `Solo tienes ${available} unidades disponibles de "${formData.productName}". Ya tienes ${alreadyInCart} en el carrito.`,
-        variant: "destructive"
+        description: `Necesitas ${shortage} unidades adicionales. Se registrarán como préstamo.`,
+        className: "bg-yellow-900 border-yellow-600 text-white"
       });
-      return;
     }
 
     // Verificar si el producto ya está en el carrito
@@ -152,7 +154,7 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
   };
 
   // Finalizar venta
-  const handleFinalizeSale = () => {
+  const handleFinalizeSale = async () => {
     if (cart.length === 0) {
       toast({
         title: "Carrito Vacío",
@@ -162,53 +164,87 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
       return;
     }
 
-    // Validar stock de todos los productos (por si cambió el inventario)
-    let stockError = null;
-    cart.forEach(item => {
-      const available = inventoryMap[item.productName] || 0;
-      if (item.quantity > available) {
-        stockError = `Stock insuficiente para "${item.productName}". Disponible: ${available}, Requerido: ${item.quantity}`;
-      }
-    });
+    try {
+      const transactionsToAdd = [];
+      let totalLoansCreated = 0;
 
-    if (stockError) {
+      // Procesar cada producto del carrito
+      for (const item of cart) {
+        const available = inventoryMap[item.productName] || 0;
+        const shortage = Math.max(0, item.quantity - available);
+
+        // Crear transacción de venta (siempre, por la cantidad total)
+        const saleResult = await addTransactionV2({
+          type: 'sale',
+          productName: item.productName,
+          quantityBoxes: item.quantity,
+          quantitySachets: 0,
+          totalAmount: item.subtotal,
+          notes: formData.notes + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
+          listPrice: item.unitPrice
+        });
+
+        if (saleResult.error) throw saleResult.error;
+        if (saleResult.data) transactionsToAdd.push(saleResult.data);
+
+        // Si hay faltante, crear préstamo
+        if (shortage > 0) {
+          const loanResult = await createLoan({
+            productName: item.productName,
+            quantityBoxes: shortage,
+            quantitySachets: 0,
+            notes: `Préstamo generado en venta - ${formData.notes || 'Sin notas'}`
+          });
+
+          if (loanResult.error) {
+            console.error('Error creando préstamo:', loanResult.error);
+            // No bloqueamos la venta si falla el préstamo, pero lo mostramos
+            toast({
+              title: "Advertencia",
+              description: `La venta se completó pero no se pudo registrar el préstamo de ${shortage} unidades de ${item.productName}`,
+              className: "bg-orange-900 border-orange-600 text-white"
+            });
+          } else {
+            totalLoansCreated += shortage;
+          }
+        }
+      }
+
+      // Enviar transacciones al padre para actualizar
+      onAdd(transactionsToAdd);
+
+      // Limpiar todo
+      const totalSold = cart.length;
+      const totalAmount = getCartTotal();
+
+      setCart([]);
+      setFormData({
+        productName: '',
+        quantity: '',
+        unitPrice: '',
+        campaignName: '',
+        notes: ''
+      });
+
+      // Toast de éxito
+      let description = `${totalSold} productos vendidos. Total: $${totalAmount.toLocaleString('es-CL')}`;
+      if (totalLoansCreated > 0) {
+        description += ` | ${totalLoansCreated} unidades registradas como préstamo`;
+      }
+
       toast({
-        title: "Error de Stock",
-        description: stockError,
+        title: "¡Venta Completada!",
+        description,
+        className: "bg-green-900 border-green-600 text-white"
+      });
+    } catch (error) {
+      console.error('Error finalizando venta:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo completar la venta. Intenta de nuevo.",
         variant: "destructive"
       });
-      return;
     }
-
-    // Crear transacciones para cada producto
-    const transactionsToAdd = cart.map(item => ({
-      type: 'venta',
-      productName: item.productName,
-      description: formData.notes,
-      quantity: item.quantity,
-      total: item.subtotal,
-      campaignName: formData.campaignName || 'Orgánico',
-      date: new Date().toISOString()
-    }));
-
-    // Enviar transacciones
-    onAdd(transactionsToAdd);
-
-    // Limpiar todo
-    setCart([]);
-    setFormData({
-      productName: '',
-      quantity: '',
-      unitPrice: '',
-      campaignName: '',
-      notes: ''
-    });
-
-    toast({
-      title: "¡Venta Completada!",
-      description: `${cart.length} productos vendidos. Total: $${getCartTotal().toLocaleString('es-CL')}`,
-      className: "bg-green-900 border-green-600 text-white"
-    });
   };
 
   const getCurrentStock = () => {
@@ -294,9 +330,24 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
             </div>
             <div className="text-right">
               <div className="text-xs text-gray-400">Stock Disponible</div>
-              <div className={`text-sm font-bold ${getCurrentStock() <= 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                {getCurrentStock()} unidades
-              </div>
+              {(() => {
+                const currentStock = getCurrentStock();
+                const qty = parseInt(formData.quantity) || 0;
+                const alreadyInCart = cart.find(item => item.productName === formData.productName)?.quantity || 0;
+                const totalNeeded = qty + alreadyInCart;
+                const shortage = Math.max(0, totalNeeded - currentStock - alreadyInCart);
+
+                return (
+                  <div className={`text-sm font-bold ${shortage > 0 ? 'text-orange-400' : currentStock <= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {currentStock} disponibles
+                    {shortage > 0 && (
+                      <span className="text-xs block text-orange-300">
+                        +{shortage} préstamo
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

@@ -6,7 +6,9 @@
 	"scripts": {
 		"dev": "vite --host :: --port 3000",
 		"build": "node tools/generate-llms.js || true && vite build",
-		"preview": "vite preview --host :: --port 3000"
+		"preview": "vite preview --host :: --port 3000",
+		"verify-supabase": "node verify-supabase-config.js",
+		"test-supabase": "node test-supabase-direct.js"
 	},
 	"dependencies": {
 		"@radix-ui/react-alert-dialog": "^1.1.4",

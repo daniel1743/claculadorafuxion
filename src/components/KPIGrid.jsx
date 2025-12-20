@@ -1,12 +1,20 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Percent, Wallet } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Percent, Wallet, HandHeart } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
 import { calculateTotalProfit, calculateInventoryValue } from '@/lib/accountingUtils';
 
-const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] }) => {
+const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [] }) => {
+  console.log('[KPIGrid] Renderizando con:', { 
+    transactions: transactions?.length || 0, 
+    inventory, 
+    inventoryMapKeys: Object.keys(inventoryMap || {}).length,
+    pricesKeys: Object.keys(prices || {}).length,
+    products: products?.length || 0
+  });
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedKPI, setSelectedKPI] = useState({ type: '', title: '', color: '' });
 
@@ -29,36 +37,66 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
     const products = {};
 
     transactions.forEach(t => {
+      // Manejar tipos antiguos y nuevos
+      const isPurchase = t.type === 'compra' || t.type === 'purchase';
+      const isSale = t.type === 'venta' || t.type === 'sale';
+      const isAd = t.type === 'publicidad';
+      
       // Campaign aggregation
-      if (t.type === 'publicidad') {
-        totalAds += t.total;
+      if (isAd) {
+        totalAds += t.total || t.totalAmount || 0;
         const cName = t.campaignName || 'Orgánico';
         if (!campaigns[cName]) campaigns[cName] = { name: cName, cost: 0, revenue: 0 };
-        campaigns[cName].cost += t.total;
+        campaigns[cName].cost += t.total || t.totalAmount || 0;
       } 
-      else if (t.type === 'compra') {
-        totalPurchases += t.total;
-        freeProducts += t.freeUnits || 0;
-        const units = t.quantity + (t.freeUnits || 0);
-        weightedCostSum += t.total;
-        totalUnitsAcquired += units;
+      else if (isPurchase) {
+        const amount = t.total || t.totalAmount || 0;
+        totalPurchases += amount;
         
-        // Product aggregation for preview
-        if (!products[t.productName]) products[t.productName] = { name: t.productName, stock: 0 };
-        products[t.productName].stock += units;
+        // Para transacciones antiguas
+        if (t.type === 'compra') {
+          freeProducts += t.freeUnits || 0;
+          const units = (t.quantity || 0) + (t.freeUnits || 0);
+          weightedCostSum += amount;
+          totalUnitsAcquired += units;
+          
+          // Product aggregation for preview
+          const productName = t.productName || 'Sin Etiqueta';
+          if (!products[productName]) products[productName] = { name: productName, stock: 0 };
+          products[productName].stock += units;
+        } else {
+          // Para transacciones nuevas (V2)
+          const units = t.quantityBoxes || t.quantity || 0;
+          weightedCostSum += amount;
+          totalUnitsAcquired += units;
+          
+          // Detectar productos gratis (notas contienen "Producto Gratis")
+          if (t.notes && t.notes.includes('Producto Gratis')) {
+            freeProducts += units;
+          }
+          
+          const productName = t.productName || 'Sin Etiqueta';
+          if (!products[productName]) products[productName] = { name: productName, stock: 0 };
+          products[productName].stock += units;
+        }
       } 
-      else if (t.type === 'venta') {
-        totalSales += t.total;
+      else if (isSale) {
+        const amount = t.total || t.totalAmount || 0;
+        totalSales += amount;
+        
         if (t.campaignName && t.campaignName !== 'Orgánico') {
            if (!campaigns[t.campaignName]) campaigns[t.campaignName] = { name: t.campaignName, cost: 0, revenue: 0 };
-           campaigns[t.campaignName].revenue += t.total;
+           campaigns[t.campaignName].revenue += amount;
         }
+        
         // Product stock reduction
-        if (products[t.productName]) {
-            products[t.productName].stock -= t.quantity;
+        const productName = t.productName || 'Sin Etiqueta';
+        const quantity = t.quantityBoxes || t.quantity || 0;
+        if (products[productName]) {
+            products[productName].stock -= quantity;
         } else {
-            if (!products[t.productName]) products[t.productName] = { name: t.productName, stock: 0 };
-            products[t.productName].stock -= t.quantity;
+            if (!products[productName]) products[productName] = { name: productName, stock: 0 };
+            products[productName].stock -= quantity;
         }
       }
     });
@@ -100,7 +138,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
       });
     }
 
-    const totalUnitsSold = transactions.filter(t => t.type === 'venta').reduce((acc, curr) => acc + curr.quantity, 0);
+    const totalUnitsSold = transactions.filter(t => t.type === 'venta' || t.type === 'sale').reduce((acc, curr) => acc + (curr.quantityBoxes || curr.quantity || 0), 0);
     const avgSalePrice = totalUnitsSold > 0 ? totalSales / totalUnitsSold : 0;
     
     // Fallback for free product value: If we have stored prices, use an average of stored prices? 
@@ -113,11 +151,34 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
     // Since we don't know WHICH products are the free ones (data structure limitation), we estimate.
     // But wait, we can check the purchase history to see which products generated free units.
     let freeValueCalc = 0;
-    transactions.filter(t => t.type === 'compra' && t.freeUnits > 0).forEach(t => {
-        const price = prices[t.productName] || (t.total / t.quantity); // Fallback to cost if no price? No, fallback to sales price?
-        // Fallback to avgSalePrice is safer if no specific price set.
+    transactions.filter(t => {
+      const isPurchase = t.type === 'compra' || t.type === 'purchase';
+      if (t.type === 'compra') {
+        return isPurchase && (t.freeUnits > 0);
+      } else {
+        // Para transacciones V2, buscar en notas
+        return isPurchase && t.notes && t.notes.includes('Producto Gratis');
+      }
+    }).forEach(t => {
+      if (t.type === 'compra') {
+        // Transacciones antiguas
         const unitPrice = prices[t.productName] || avgSalePrice;
-        freeValueCalc += (t.freeUnits * unitPrice);
+        freeValueCalc += (t.freeUnits || 0) * unitPrice;
+      } else {
+        // Transacciones V2 - extraer valor de mercado de las notas
+        // Formato: "Valor Mercado: $X,XXX"
+        const notes = t.notes || '';
+        const valorMatch = notes.match(/Valor Mercado:\s*\$?([\d,]+)/);
+        if (valorMatch) {
+          const valor = parseFloat(valorMatch[1].replace(/,/g, ''));
+          freeValueCalc += valor;
+        } else {
+          // Fallback: usar precio del producto
+          const unitPrice = prices[t.productName] || avgSalePrice;
+          const quantity = t.quantityBoxes || 1;
+          freeValueCalc += unitPrice * quantity;
+        }
+      }
     });
 
     let bestCampaign = 'N/A';
@@ -153,6 +214,41 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
       }
     });
 
+    // NUEVO: Calcular préstamos totales
+    let totalLoanedBoxes = 0;
+    let totalLoanedValue = 0;
+    const loansByProduct = [];
+
+    // Sumar préstamos de la prop loans
+    if (loans && loans.length > 0) {
+      const loanMap = {};
+
+      loans.forEach(loan => {
+        const key = loan.productName;
+        if (!loanMap[key]) {
+          loanMap[key] = {
+            productName: loan.productName,
+            boxes: 0,
+            sachets: 0,
+            listPrice: loan.listPrice || 0
+          };
+        }
+        loanMap[key].boxes += loan.quantityBoxes || 0;
+        loanMap[key].sachets += loan.quantitySachets || 0;
+      });
+
+      Object.values(loanMap).forEach(loan => {
+        totalLoanedBoxes += loan.boxes;
+        totalLoanedValue += loan.boxes * loan.listPrice;
+        if (loan.boxes > 0 || loan.sachets > 0) {
+          loansByProduct.push({
+            label: loan.productName,
+            value: `${loan.boxes} cajas${loan.sachets > 0 ? ` + ${loan.sachets} sobres` : ''}`
+          });
+        }
+      });
+    }
+
     return {
       totalAds,
       totalPurchases,
@@ -167,9 +263,12 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
       bestCampaign,
       campaignList,
       productList,
-      profitPreview
+      profitPreview,
+      totalLoanedBoxes,
+      totalLoanedValue,
+      loansByProduct
     };
-  }, [transactions, inventoryMap, prices, products]);
+  }, [transactions, inventoryMap, prices, products, loans]);
 
   return (
     <>
@@ -273,6 +372,19 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [] 
           color="green"
           delay={0.45}
           onClick={() => handleCardClick('inventory', 'Valorización', 'green')}
+        />
+        <MetricCard
+          title="Préstamos Activos"
+          value={metrics.totalLoanedBoxes}
+          icon={HandHeart}
+          trend="Unidades Prestadas"
+          color="orange"
+          delay={0.5}
+          hoverData={[
+            ...(metrics.totalLoanedValue > 0 ? [{ label: 'Valor Estimado', value: formatCLP(metrics.totalLoanedValue) }] : []),
+            ...metrics.loansByProduct.slice(0, 3)
+          ]}
+          onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
         />
       </div>
 

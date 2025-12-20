@@ -5,7 +5,18 @@
 		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
 		<meta name="generator" content="Hostinger Horizons" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hostinger Horizons</title>
+		<title>Dashboard Fuxion - Gestión Completa</title>
+		<!-- Debug Interceptor - Se activa automáticamente en desarrollo -->
+		<script>
+			// Auto-cargar debug interceptor solo en desarrollo
+			if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+				const script = document.createElement('script');
+				script.src = '/debug-interceptor.js';
+				script.async = true;
+				document.head.appendChild(script);
+				console.log('%c🔍 Debug Mode Activado', 'background: #00ff00; color: #000; padding: 5px; font-weight: bold;');
+			}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

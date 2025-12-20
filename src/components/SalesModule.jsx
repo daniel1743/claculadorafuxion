@@ -5,8 +5,20 @@ import { Plus, Tag, Hash, DollarSign, Link2, FileText, Layers } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import { addTransactionV2 } from '@/lib/transactionServiceV2';
+import { getUserProductsWithInventory } from '@/lib/productService';
+import { validateStock } from '@/lib/inventoryUtils';
+import { supabase } from '@/lib/supabase';
+import { createLoan } from '@/lib/loanService';
 
 const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) => {
+  console.log('[SalesModule] Renderizando con props:', { 
+    inventoryMapKeys: Object.keys(inventoryMap).length, 
+    campaigns: campaigns.length, 
+    pricesKeys: Object.keys(prices).length, 
+    products: products.length 
+  });
+  
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     productName: '',
@@ -16,6 +28,48 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     totalReceived: '',
     campaignName: ''
   });
+  const [availableProducts, setAvailableProducts] = useState([]);
+  
+  console.log('[SalesModule] Estado inicial:', { formData, availableProducts: availableProducts.length });
+
+  // Cargar productos con inventario
+  useEffect(() => {
+    console.log('[SalesModule] useEffect - cargando productos...');
+    let isMounted = true;
+    const loadProducts = async () => {
+      try {
+        console.log('[SalesModule] Obteniendo usuario de supabase...');
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.error('[SalesModule] Error obteniendo usuario:', userError);
+          return;
+        }
+        console.log('[SalesModule] Usuario obtenido:', user ? user.id : 'null');
+        
+        if (user && isMounted) {
+          console.log('[SalesModule] Cargando productos con inventario para userId:', user.id);
+          const { data, error } = await getUserProductsWithInventory(user.id);
+          if (error) {
+            console.error('[SalesModule] Error cargando productos:', error);
+            return;
+          }
+          console.log('[SalesModule] Productos cargados:', data ? data.length : 0, data);
+          if (data && isMounted) {
+            setAvailableProducts(data);
+            console.log('[SalesModule] availableProducts actualizado');
+          }
+        }
+      } catch (error) {
+        console.error('[SalesModule] ERROR en loadProducts:', error);
+        console.error('[SalesModule] Stack trace:', error.stack);
+      }
+    };
+    loadProducts();
+    return () => {
+      console.log('[SalesModule] Cleanup useEffect');
+      isMounted = false;
+    };
+  }, []);
 
   // Auto-calculate total received based on stored price when product or quantity changes
   useEffect(() => {
@@ -31,7 +85,7 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     }
   }, [formData.productName, formData.quantity, prices]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const totalQty = parseInt(formData.quantity) || 0;
     const totalMoney = parseFloat(formData.totalReceived) || 0;
@@ -48,91 +102,119 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     const tagsList = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
     let transactionsToAdd = [];
 
-    if (tagsList.length > 0) {
-       // Validate Inventory for each tag first
-       const baseQty = Math.floor(totalQty / tagsList.length);
-       const remainder = totalQty % tagsList.length;
-       
-       let possible = true;
-       let insufficientTag = '';
+    try {
+      let totalLoansCreated = 0;
 
-       tagsList.forEach((tag, index) => {
+      if (tagsList.length > 0) {
+        // Calcular distribución de cantidades
+        const baseQty = Math.floor(totalQty / tagsList.length);
+        const remainder = totalQty % tagsList.length;
+        const revPerUnit = totalMoney / totalQty;
+
+        for (const tag of tagsList) {
           let qty = baseQty;
-          if (index < remainder) qty += 1;
-          
-          const available = inventoryMap[tag] || 0;
-          if (qty > available) {
-             possible = false;
-             insufficientTag = `${tag} (Req: ${qty}, Disp: ${available})`;
-          }
-       });
-
-       if (!possible) {
-          toast({
-            title: "Stock Insuficiente",
-            description: `No hay suficiente inventario para la etiqueta: ${insufficientTag}`,
-            variant: "destructive"
-          });
-          return;
-       }
-
-       // Validation passed, create transactions
-       const revPerUnit = totalMoney / totalQty;
-
-       tagsList.forEach((tag, index) => {
-          let qty = baseQty;
-          if (index < remainder) qty += 1;
+          if (tagsList.indexOf(tag) < remainder) qty += 1;
 
           if (qty > 0) {
-             transactionsToAdd.push({
-               type: 'venta',
-               productName: tag,
-               description: `${formData.productName} ${formData.description}`.trim(),
-               quantity: qty,
-               total: qty * revPerUnit,
-               campaignName: formData.campaignName || 'Orgánico',
-               date: new Date().toISOString()
-             });
-          }
-       });
+            // Verificar stock disponible
+            const available = inventoryMap[tag] || 0;
+            const shortage = Math.max(0, qty - available);
 
-       toast({
+            // Crear transacción de venta (siempre, por la cantidad total)
+            const result = await addTransactionV2({
+              type: 'sale',
+              productName: tag,
+              quantityBoxes: qty,
+              quantitySachets: 0,
+              totalAmount: qty * revPerUnit,
+              notes: `${formData.productName} ${formData.description}`.trim() + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
+              listPrice: prices[tag] || 0
+            });
+
+            if (result.error) throw result.error;
+            if (result.data) transactionsToAdd.push(result.data);
+
+            // Si hay faltante, crear préstamo
+            if (shortage > 0) {
+              const loanResult = await createLoan({
+                productName: tag,
+                quantityBoxes: shortage,
+                quantitySachets: 0,
+                notes: `Préstamo generado en venta desglosada de ${formData.productName} - ${formData.description}`
+              });
+
+              if (loanResult.error) {
+                console.error(`Error creando préstamo para ${tag}:`, loanResult.error);
+              } else {
+                totalLoansCreated += shortage;
+              }
+            }
+          }
+        }
+
+        toast({
           title: "Venta Desglosada",
           description: `Venta registrada dividida en ${tagsList.length} items.`,
           className: "bg-green-900 border-green-600 text-white"
-       });
+        });
 
-    } else {
-       // Single Product check
-       const available = inventoryMap[formData.productName] || 0;
-       if (totalQty > available) {
-          toast({
-            title: "Stock Insuficiente",
-            description: `Solo tienes ${available} unidades de "${formData.productName}".`,
-            variant: "destructive"
-          });
-          return;
-       }
+      } else {
+        // Single Product sale
+        const available = inventoryMap[formData.productName] || 0;
+        const shortage = Math.max(0, totalQty - available);
 
-       transactionsToAdd.push({
-          type: 'venta',
+        // Crear transacción de venta (siempre, por la cantidad total)
+        const result = await addTransactionV2({
+          type: 'sale',
           productName: formData.productName,
-          description: formData.description,
-          quantity: totalQty,
-          total: totalMoney,
-          campaignName: formData.campaignName || 'Orgánico',
-          date: new Date().toISOString()
-       });
+          quantityBoxes: totalQty,
+          quantitySachets: 0,
+          totalAmount: totalMoney,
+          notes: formData.description + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
+          listPrice: prices[formData.productName] || 0
+        });
 
-       toast({
+        if (result.error) throw result.error;
+        if (result.data) transactionsToAdd.push(result.data);
+
+        // Si hay faltante, crear préstamo
+        if (shortage > 0) {
+          const loanResult = await createLoan({
+            productName: formData.productName,
+            quantityBoxes: shortage,
+            quantitySachets: 0,
+            notes: `Préstamo generado en venta - ${formData.description || 'Sin descripción'}`
+          });
+
+          if (loanResult.error) {
+            console.error('Error creando préstamo:', loanResult.error);
+          } else {
+            totalLoansCreated += shortage;
+          }
+        }
+
+        let description = "Ganancia calculada e inventario descontado.";
+        if (totalLoansCreated > 0) {
+          description += ` ${totalLoansCreated} unidades registradas como préstamo.`;
+        }
+
+        toast({
           title: "Venta Exitosa",
-          description: "Ganancia calculada e inventario descontado.",
+          description,
           className: "bg-green-900 border-green-600 text-white"
-       });
-    }
+        });
+      }
 
-    onAdd(transactionsToAdd);
-    setFormData({ productName: '', description: '', tags: '', quantity: '', totalReceived: '', campaignName: '' });
+      onAdd(transactionsToAdd);
+      setFormData({ productName: '', description: '', tags: '', quantity: '', totalReceived: '', campaignName: '' });
+    } catch (error) {
+      console.error('Error en handleSubmit:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo registrar la venta. Intenta de nuevo.",
+        variant: "destructive"
+      });
+    }
   };
 
   const getCurrentStock = () => {

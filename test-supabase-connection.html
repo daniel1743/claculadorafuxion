@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Conexión Supabase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: #2a2a2a;
+            border-left: 4px solid #666;
+        }
+        .success {
+            border-color: #4caf50;
+            background: #1b3a1b;
+        }
+        .error {
+            border-color: #f44336;
+            background: #3a1b1b;
+        }
+        .warning {
+            border-color: #ff9800;
+            background: #3a2b1b;
+        }
+        .info {
+            border-color: #2196f3;
+            background: #1b2a3a;
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        pre {
+            background: #0a0a0a;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        h1 {
+            color: #2196f3;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test de Conexión Supabase</h1>
+
+    <div id="results"></div>
+
+    <button onclick="testAll()">🧪 Ejecutar Todas las Pruebas</button>
+    <button onclick="clearResults()">🗑️ Limpiar Resultados</button>
+
+    <script type="module">
+        const SUPABASE_URL = 'https://oxoirfrlnpnefuzspldd.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94b2lyZnJsbnBuZWZ1enNwbGRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjI1MDAsImV4cCI6MjA4MDQzODUwMH0.OH90hprQlXOpDm6SFiZY-MyXuJLXAg1ixCxNNsvKrCg';
+
+        const resultsDiv = document.getElementById('results');
+
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = message;
+            resultsDiv.appendChild(div);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+
+        // Test 1: Verificar URL
+        async function test1_VerifyURL() {
+            addResult('<h3>Test 1: Verificar URL de Supabase</h3><div class="loading"></div>', 'info');
+
+            try {
+                const response = await fetch(SUPABASE_URL, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                if (response.ok || response.status === 404) {
+                    addResult(`✅ URL accesible: ${SUPABASE_URL}<br>Status: ${response.status}`, 'success');
+                } else {
+                    addResult(`⚠️ URL responde pero con error: ${response.status}`, 'warning');
+                }
+            } catch (error) {
+                addResult(`❌ No se puede alcanzar la URL: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 2: Verificar REST API
+        async function test2_VerifyRestAPI() {
+            addResult('<h3>Test 2: Verificar REST API</h3><div class="loading"></div>', 'info');
+
+            const restURL = `${SUPABASE_URL}/rest/v1/`;
+
+            try {
+                const response = await fetch(restURL, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                addResult(`✅ REST API accesible<br>Status: ${response.status}`, 'success');
+            } catch (error) {
+                addResult(`❌ REST API no responde: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 3: Verificar Auth API
+        async function test3_VerifyAuthAPI() {
+            addResult('<h3>Test 3: Verificar Auth API</h3><div class="loading"></div>', 'info');
+
+            const authURL = `${SUPABASE_URL}/auth/v1/health`;
+
+            try {
+                const response = await fetch(authURL, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                const data = await response.json();
+                addResult(`✅ Auth API funcional<br><pre>${JSON.stringify(data, null, 2)}</pre>`, 'success');
+            } catch (error) {
+                addResult(`❌ Auth API no responde: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 4: Cargar librería Supabase
+        async function test4_LoadSupabaseLib() {
+            addResult('<h3>Test 4: Cargar librería Supabase JS</h3><div class="loading"></div>', 'info');
+
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                addResult('✅ Librería Supabase JS cargada correctamente', 'success');
+
+                // Test 5: Crear cliente
+                addResult('<h3>Test 5: Crear cliente Supabase</h3><div class="loading"></div>', 'info');
+
+                const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                addResult('✅ Cliente Supabase creado', 'success');
+
+                // Test 6: getSession con timeout
+                addResult('<h3>Test 6: getSession() con timeout</h3><div class="loading"></div>', 'info');
+
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Timeout después de 5 segundos')), 5000);
+                });
+
+                const sessionPromise = supabase.auth.getSession();
+
+                try {
+                    const { data, error } = await Promise.race([sessionPromise, timeoutPromise]);
+
+                    if (error) {
+                        addResult(`⚠️ getSession() respondió con error:<br><pre>${JSON.stringify(error, null, 2)}</pre>`, 'warning');
+                    } else {
+                        addResult(`✅ getSession() funcionó correctamente<br>Sesión activa: ${!!data.session}<br><pre>${JSON.stringify(data, null, 2)}</pre>`, 'success');
+                    }
+                } catch (timeoutError) {
+                    addResult(`❌ getSession() TIMEOUT: ${timeoutError.message}<br><br><strong>🔍 Diagnóstico:</strong><br>- El método getSession() tarda más de 5 segundos<br>- Posibles causas: proyecto pausado, problemas de red, o configuración incorrecta`, 'error');
+                }
+
+            } catch (error) {
+                addResult(`❌ Error al cargar Supabase: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 7: Ping directo
+        async function test7_DirectPing() {
+            addResult('<h3>Test 7: Ping Directo al Servidor</h3><div class="loading"></div>', 'info');
+
+            const startTime = performance.now();
+
+            try {
+                await fetch(SUPABASE_URL, {
+                    method: 'HEAD',
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                const endTime = performance.now();
+                const latency = Math.round(endTime - startTime);
+
+                if (latency < 500) {
+                    addResult(`✅ Latencia excelente: ${latency}ms`, 'success');
+                } else if (latency < 2000) {
+                    addResult(`⚠️ Latencia alta: ${latency}ms`, 'warning');
+                } else {
+                    addResult(`❌ Latencia muy alta: ${latency}ms - Posible problema de red`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ No se pudo hacer ping: ${error.message}`, 'error');
+            }
+        }
+
+        // Ejecutar todas las pruebas
+        window.testAll = async function() {
+            clearResults();
+            addResult('<h2>🚀 Iniciando diagnóstico completo...</h2>', 'info');
+
+            await test1_VerifyURL();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await test2_VerifyRestAPI();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await test3_VerifyAuthAPI();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await test7_DirectPing();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await test4_LoadSupabaseLib();
+
+            addResult('<h2>✅ Diagnóstico completado</h2>', 'success');
+        }
+
+        window.clearResults = clearResults;
+
+        // Auto-ejecutar al cargar
+        window.addEventListener('load', () => {
+            setTimeout(testAll, 500);
+        });
+    </script>
+</body>
+</html>

@@ -191,6 +191,48 @@ CREATE POLICY "Los usuarios pueden eliminar sus propios productos"
 CREATE INDEX IF NOT EXISTS idx_products_user_id ON public.products(user_id);
 CREATE INDEX IF NOT EXISTS idx_products_name ON public.products(name);
 
+-- 6. VERIFICAR Y CREAR TABLA DE PRÉSTAMOS (LOANS)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.loans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    quantity_boxes INTEGER DEFAULT 0,
+    quantity_sachets INTEGER DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Habilitar RLS
+ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de seguridad
+CREATE POLICY "Los usuarios pueden ver sus propios préstamos"
+    ON public.loans
+    FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Los usuarios pueden crear sus propios préstamos"
+    ON public.loans
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Los usuarios pueden actualizar sus propios préstamos"
+    ON public.loans
+    FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Los usuarios pueden eliminar sus propios préstamos"
+    ON public.loans
+    FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Índices para mejorar el rendimiento
+CREATE INDEX IF NOT EXISTS idx_loans_user_id ON public.loans(user_id);
+CREATE INDEX IF NOT EXISTS idx_loans_product_id ON public.loans(product_id);
+CREATE INDEX IF NOT EXISTS idx_loans_created_at ON public.loans(created_at DESC);
+
 -- =====================================================
 -- INSTRUCCIONES DE USO:
 -- =====================================================
