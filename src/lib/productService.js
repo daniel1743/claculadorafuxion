@@ -6,6 +6,42 @@ import { supabase } from './supabase';
  */
 
 /**
+ * Cache de usuario para evitar múltiples llamadas a getUser()
+ * TTL: 5 segundos (suficiente para operaciones en batch)
+ */
+let userCache = null;
+let userCachePromise = null;
+let userCacheTime = 0;
+const USER_CACHE_TTL = 5000; // 5 segundos
+
+const getCachedUser = async () => {
+  const now = Date.now();
+
+  // Si hay una llamada en progreso, esperarla
+  if (userCachePromise) return userCachePromise;
+
+  // Si tenemos cache válido, usarlo
+  if (userCache && (now - userCacheTime) < USER_CACHE_TTL) {
+    return userCache;
+  }
+
+  // Hacer nueva llamada
+  userCachePromise = supabase.auth.getUser()
+    .then(result => {
+      userCache = result;
+      userCacheTime = Date.now();
+      userCachePromise = null;
+      return result;
+    })
+    .catch(error => {
+      userCachePromise = null;
+      throw error;
+    });
+
+  return userCachePromise;
+};
+
+/**
  * Obtiene un producto por nombre
  * @param {string} userId - ID del usuario
  * @param {string} productName - Nombre del producto
@@ -82,7 +118,7 @@ export const getUserProducts = async (userId) => {
  */
 export const upsertProduct = async (productData) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getCachedUser();
     if (!user) throw new Error('Usuario no autenticado');
 
     const {
@@ -168,7 +204,7 @@ export const upsertProduct = async (productData) => {
  */
 export const updateProductInventory = async (productId, inventory) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getCachedUser();
     if (!user) throw new Error('Usuario no autenticado');
 
     const updates = {
@@ -206,7 +242,7 @@ export const updateProductInventory = async (productId, inventory) => {
  */
 export const deleteProduct = async (productId) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getCachedUser();
     if (!user) throw new Error('Usuario no autenticado');
 
     const { error } = await supabase
