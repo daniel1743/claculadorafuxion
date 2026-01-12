@@ -240,17 +240,22 @@ function App() {
         console.log('[App] 👤 Usuario encontrado:', currentUser.email);
         console.log('[App] 👤 Usuario ID:', currentUser.id);
 
-        // Obtener perfil con timeout de 45 segundos
+        // Obtener perfil con timeout reducido
         console.log('[App] 🔄 Obteniendo perfil...');
         let profileData = null;
 
         try {
           const profilePromise = getUserProfile(currentUser.id);
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout obteniendo perfil')), 45000); // Aumentado de 5s a 45s
+            setTimeout(() => {
+              console.log('[App] ⏱️ Timeout de perfil alcanzado (10s)');
+              reject(new Error('Timeout obteniendo perfil'));
+            }, 10000); // Reducido a 10 segundos
           });
 
+          console.log('[App] 🏁 Iniciando race entre perfil y timeout...');
           const result = await Promise.race([profilePromise, timeoutPromise]);
+          console.log('[App] 🏁 Race completado, resultado:', result);
           profileData = result.data;
 
           if (result.error) {
@@ -259,7 +264,7 @@ function App() {
             console.log('[App] ✅ Perfil obtenido:', profileData?.name);
           }
         } catch (error) {
-          console.warn('[App] ⚠️ Timeout/Error obteniendo perfil, continuando sin él');
+          console.warn('[App] ⚠️ Timeout/Error obteniendo perfil, continuando sin él:', error.message);
         }
 
         const userData = {

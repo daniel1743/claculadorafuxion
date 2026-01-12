@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Diagnóstico Supabase</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+        h1 { color: #0ff; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+        pre { background: #000; padding: 10px; border: 1px solid #333; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico de Datos en Supabase</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const output = document.getElementById('output');
+
+        const supabaseUrl = 'https://oxoirfrlnpnefuzspldd.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94b2lyZnJsbnBuZWZ1enNwbGRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjI1MDAsImV4cCI6MjA4MDQzODUwMH0.OH90hprQlXOpDm6SFiZY-MyXuJLXAg1ixCxNNsvKrCg';
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        async function diagnosticar() {
+            try {
+                output.innerHTML += '<h2 class="success">✅ Conectado a Supabase</h2>';
+
+                // 1. Verificar usuario
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+                if (userError) {
+                    output.innerHTML += `<p class="error">❌ Error obteniendo usuario: ${userError.message}</p>`;
+                    return;
+                }
+
+                if (!user) {
+                    output.innerHTML += '<p class="warning">⚠️ NO HAY USUARIO LOGUEADO</p>';
+                    output.innerHTML += '<p>Por favor, haz login primero en la aplicación</p>';
+                    return;
+                }
+
+                output.innerHTML += `<h3 class="success">👤 Usuario actual:</h3>`;
+                output.innerHTML += `<pre>Email: ${user.email}\nID: ${user.id}</pre>`;
+
+                // 2. Contar transacciones
+                const { data: transactions, error: txError } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                output.innerHTML += `<h3>📊 Transacciones:</h3>`;
+                if (txError) {
+                    output.innerHTML += `<p class="error">❌ Error: ${txError.message}</p>`;
+                } else {
+                    output.innerHTML += `<p class="success">Total: ${transactions.length}</p>`;
+                    if (transactions.length > 0) {
+                        output.innerHTML += `<pre>${JSON.stringify(transactions.slice(0, 3), null, 2)}</pre>`;
+                    }
+                }
+
+                // 3. Contar productos
+                const { data: products, error: prodError } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                output.innerHTML += `<h3>📦 Productos:</h3>`;
+                if (prodError) {
+                    output.innerHTML += `<p class="error">❌ Error: ${prodError.message}</p>`;
+                } else {
+                    output.innerHTML += `<p class="success">Total: ${products.length}</p>`;
+                    if (products.length > 0) {
+                        output.innerHTML += `<pre>${JSON.stringify(products, null, 2)}</pre>`;
+                    }
+                }
+
+                // 4. Contar préstamos
+                const { data: loans, error: loanError } = await supabase
+                    .from('loans')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                output.innerHTML += `<h3>💰 Préstamos:</h3>`;
+                if (loanError) {
+                    output.innerHTML += `<p class="error">❌ Error: ${loanError.message}</p>`;
+                } else {
+                    output.innerHTML += `<p class="success">Total: ${loans.length}</p>`;
+                }
+
+                // 5. Verificar estructura de tablas
+                output.innerHTML += `<h3>🔍 Verificando estructura...</h3>`;
+                const { data: allTx, error: allTxError } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .limit(1);
+
+                if (allTxError) {
+                    output.innerHTML += `<p class="error">❌ Error accediendo a tabla transactions: ${allTxError.message}</p>`;
+                } else {
+                    output.innerHTML += `<p class="success">✅ Tabla transactions existe</p>`;
+                }
+
+                // CONCLUSIÓN
+                output.innerHTML += '<h2>📋 CONCLUSIÓN:</h2>';
+                if (transactions.length === 0 && products.length === 0) {
+                    output.innerHTML += '<p class="warning">⚠️ NO HAY DATOS GUARDADOS para este usuario</p>';
+                    output.innerHTML += '<p>Posibles causas:</p>';
+                    output.innerHTML += '<ul>';
+                    output.innerHTML += '<li>Es la primera vez que usas la app (base de datos vacía)</li>';
+                    output.innerHTML += '<li>Los datos están en otra cuenta de usuario</li>';
+                    output.innerHTML += '<li>Hubo un error al guardar anteriormente</li>';
+                    output.innerHTML += '</ul>';
+                    output.innerHTML += '<p class="success">💡 SOLUCIÓN: Intenta crear una nueva venta/compra para probar</p>';
+                } else {
+                    output.innerHTML += '<p class="success">✅ Hay datos en la base de datos</p>';
+                }
+
+            } catch (error) {
+                output.innerHTML += `<p class="error">❌ ERROR FATAL: ${error.message}</p>`;
+                console.error(error);
+            }
+        }
+
+        diagnosticar();
+    </script>
+</body>
+</html>
