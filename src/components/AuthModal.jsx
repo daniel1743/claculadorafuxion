@@ -202,22 +202,21 @@ const AuthModal = ({ isOpen, onLogin }) => {
                   </div>
                </div>
 
-               <Button 
+               <Button
                  type="submit"
                  disabled={isLoading}
                  className="w-full h-11 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/20 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                >
-                 {isLoading ? (
-                   <>
-                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                     {isRegistering ? 'Creando cuenta...' : 'Iniciando sesión...'}
-                   </>
-                 ) : (
-                   <>
-                     {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
-                     <ArrowRight className="w-4 h-4 ml-2" />
-                   </>
-                 )}
+                 <span className="flex items-center justify-center">
+                   {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                   <span>
+                     {isLoading
+                       ? (isRegistering ? 'Creando cuenta...' : 'Iniciando sesión...')
+                       : (isRegistering ? 'Registrarse' : 'Iniciar Sesión')
+                     }
+                   </span>
+                   {!isLoading && <ArrowRight className="w-4 h-4 ml-2" />}
+                 </span>
                </Button>
             </form>
 
