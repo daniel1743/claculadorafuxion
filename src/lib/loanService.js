@@ -13,34 +13,47 @@ import { getProductByName } from './productService';
  */
 export const getUserLoans = async (userId) => {
   try {
+    // 1. Query simple sin JOIN (mucho más rápido)
     const { data, error } = await supabase
       .from('loans')
-      .select(`
-        *,
-        products (
-          id,
-          name,
-          list_price,
-          sachets_per_box
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Mapear campos al formato del frontend
-    const mappedData = (data || []).map(loan => ({
-      id: loan.id,
-      productId: loan.product_id,
-      productName: loan.products?.name || 'Desconocido',
-      quantityBoxes: parseInt(loan.quantity_boxes) || 0,
-      quantitySachets: parseInt(loan.quantity_sachets) || 0,
-      listPrice: parseFloat(loan.products?.list_price) || 0,
-      notes: loan.notes || '',
-      createdAt: loan.created_at,
-      updatedAt: loan.updated_at
-    }));
+    // 2. Cargar productos por separado solo los que necesitamos
+    let productsMap = {};
+    if (data && data.length > 0) {
+      const productIds = [...new Set(data.map(l => l.product_id).filter(Boolean))];
+      if (productIds.length > 0) {
+        const { data: products } = await supabase
+          .from('products')
+          .select('id, name, list_price, sachets_per_box')
+          .in('id', productIds);
+
+        if (products) {
+          productsMap = Object.fromEntries(products.map(p => [p.id, p]));
+        }
+      }
+    }
+
+    // 3. Mapear datos con productos (join en memoria)
+    const mappedData = (data || []).map(loan => {
+      const product = productsMap[loan.product_id];
+      return {
+        id: loan.id,
+        productId: loan.product_id,
+        productName: product?.name || 'Desconocido',
+        quantityBoxes: parseInt(loan.quantity_boxes) || 0,
+        quantitySachets: parseInt(loan.quantity_sachets) || 0,
+        listPrice: parseFloat(product?.list_price) || 0,
+        sachetsPerBox: parseInt(product?.sachets_per_box) || 28,
+        notes: loan.notes || '',
+        createdAt: loan.created_at,
+        updatedAt: loan.updated_at
+      };
+    });
 
     return { data: mappedData, error: null };
   } catch (error) {

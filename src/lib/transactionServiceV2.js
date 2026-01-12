@@ -13,41 +13,56 @@ import { getProductByName, upsertProduct } from './productService';
  */
 export const getTransactionsV2 = async (userId) => {
   try {
+    // 1. Query simple sin JOIN (mucho más rápido)
     const { data, error } = await supabase
       .from('transactions')
-      .select(`
-        *,
-        products (
-          id,
-          name,
-          weighted_average_cost,
-          list_price,
-          sachets_per_box
-        )
-      `)
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    
-    // Mapear campos de la BD al formato del frontend
-    const mappedData = (data || []).map(t => ({
-      id: t.id,
-      type: t.type,
-      productId: t.product_id,
-      productName: t.products?.name || null,
-      quantityBoxes: parseInt(t.quantity_boxes) || 0,
-      quantitySachets: parseInt(t.quantity_sachets) || 0,
-      totalAmount: parseFloat(t.total_amount) || 0,
-      unitCostSnapshot: parseFloat(t.unit_cost_snapshot) || 0,
-      notes: t.notes || '',
-      date: t.created_at,
-      // Compatibilidad con formato antiguo
-      quantity: parseInt(t.quantity_boxes) || 0,
-      total: parseFloat(t.total_amount) || 0,
-      realUnitCost: parseFloat(t.unit_cost_snapshot) || 0
-    }));
-    
+
+    // 2. Cargar productos por separado solo los que necesitamos
+    let productsMap = {};
+    if (data && data.length > 0) {
+      const productIds = [...new Set(data.map(t => t.product_id).filter(Boolean))];
+      if (productIds.length > 0) {
+        const { data: products } = await supabase
+          .from('products')
+          .select('id, name, weighted_average_cost, list_price, sachets_per_box')
+          .in('id', productIds);
+
+        if (products) {
+          productsMap = Object.fromEntries(products.map(p => [p.id, p]));
+        }
+      }
+    }
+
+    // 3. Mapear datos con productos (join en memoria)
+    const mappedData = (data || []).map(t => {
+      const product = productsMap[t.product_id];
+      return {
+        id: t.id,
+        type: t.type,
+        productId: t.product_id,
+        productName: product?.name || null,
+        quantityBoxes: parseInt(t.quantity_boxes) || 0,
+        quantitySachets: parseInt(t.quantity_sachets) || 0,
+        totalAmount: parseFloat(t.total_amount) || 0,
+        unitCostSnapshot: parseFloat(t.unit_cost_snapshot) || 0,
+        notes: t.notes || '',
+        date: t.created_at,
+        // Compatibilidad con formato antiguo
+        quantity: parseInt(t.quantity_boxes) || 0,
+        total: parseFloat(t.total_amount) || 0,
+        realUnitCost: parseFloat(t.unit_cost_snapshot) || 0,
+        // Información adicional del producto
+        weightedAverageCost: product?.weighted_average_cost || 0,
+        listPrice: product?.list_price || 0,
+        sachetsPerBox: product?.sachets_per_box || 28
+      };
+    });
+
     return { data: mappedData, error: null };
   } catch (error) {
     console.error('Error en getTransactionsV2:', error);
