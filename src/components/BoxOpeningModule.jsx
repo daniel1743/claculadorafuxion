@@ -88,8 +88,8 @@ const BoxOpeningModule = ({ onAdd, products = [] }) => {
       const result = await addTransactionV2({
         type: 'box_opening',
         productName: formData.productName,
-        quantityBoxes: quantityBoxes,
-        quantitySachets: 0,
+        quantityBoxes: -quantityBoxes, // Negativo: se consumen cajas
+        quantitySachets: totalSachets,  // Positivo: se generan sobres
         totalAmount: 0,
         notes: `Apertura de ${quantityBoxes} caja${quantityBoxes > 1 ? 's' : ''} → ${totalSachets} sobres`
       });
