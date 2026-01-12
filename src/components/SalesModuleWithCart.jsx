@@ -378,13 +378,15 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
             </div>
 
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-              <AnimatePresence>
+              <AnimatePresence mode="popLayout">
                 {cart.map((item, index) => (
                   <motion.div
-                    key={index}
+                    key={`cart-${item.productName}-${index}`}
+                    layout
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 10 }}
+                    transition={{ duration: 0.2 }}
                     className="bg-black/30 border border-white/5 rounded-lg p-3 hover:border-green-500/20 transition-all"
                   >
                     <div className="flex items-start justify-between gap-2">

@@ -389,13 +389,15 @@ const ShoppingCartModule = ({ onAdd, prices = {}, products = [] }) => {
             </h4>
             
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              <AnimatePresence>
+              <AnimatePresence mode="popLayout">
                 {cartItems.map((item) => (
                   <motion.div
-                    key={item.id}
+                    key={`cart-item-${item.id}`}
+                    layout
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.2 }}
                     className="bg-black/40 rounded-lg p-3 flex items-center justify-between border border-white/5"
                   >
                     <div className="flex-1">

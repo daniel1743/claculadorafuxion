@@ -88,9 +88,10 @@ const MetricCard = ({ title, value, icon: Icon, trend, color = 'gold', isText = 
         </div>
       </div>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isHovered && hoverData && hoverData.length > 0 && (
           <motion.div
+            key={`metric-hover-${title}`}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
