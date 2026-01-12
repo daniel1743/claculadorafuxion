@@ -166,7 +166,7 @@ function App() {
         console.log('[App] 🔄 Llamando getSession()...');
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentado de 5s a 30s
 
         let sessionResult;
         try {
@@ -208,7 +208,7 @@ function App() {
 
           // Si es abort/timeout, mostrar login
           if (fetchError.name === 'AbortError') {
-            console.error('[App] ⏱️ TIMEOUT: La validación tardó más de 5s');
+            console.error('[App] ⏱️ TIMEOUT: La validación tardó más de 30s');
           }
 
           setAuthModalOpen(true);
@@ -240,14 +240,14 @@ function App() {
         console.log('[App] 👤 Usuario encontrado:', currentUser.email);
         console.log('[App] 👤 Usuario ID:', currentUser.id);
 
-        // Obtener perfil con timeout de 5 segundos
+        // Obtener perfil con timeout de 45 segundos
         console.log('[App] 🔄 Obteniendo perfil...');
         let profileData = null;
 
         try {
           const profilePromise = getUserProfile(currentUser.id);
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout obteniendo perfil')), 5000);
+            setTimeout(() => reject(new Error('Timeout obteniendo perfil')), 45000); // Aumentado de 5s a 45s
           });
 
           const result = await Promise.race([profilePromise, timeoutPromise]);
