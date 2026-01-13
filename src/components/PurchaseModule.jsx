@@ -7,9 +7,13 @@ import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
 import { addTransactionV2 } from '@/lib/transactionServiceV2';
 import { getProductByName, upsertProduct } from '@/lib/productService';
+import HelpTooltip from '@/components/HelpTooltip';
+import HelpPanel, { HelpButton } from '@/components/HelpPanel';
+import { purchasesHelp, purchasesFieldHelp } from '@/lib/helpContent';
 
 const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
   const { toast } = useToast();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [formData, setFormData] = useState({
     productName: '',
     description: '',
@@ -132,14 +136,20 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
       animate={{ opacity: 1, x: 0 }}
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6 h-full"
     >
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-red-500 rounded-full"></span>
-        Nueva Compra
-      </h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <span className="w-1 h-6 bg-red-500 rounded-full"></span>
+          Nueva Compra
+        </h3>
+        <HelpButton onClick={() => setHelpOpen(true)} className="text-xs" />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Producto Principal *</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Producto Principal *
+            <HelpTooltip content={purchasesFieldHelp.product} />
+          </label>
           <ProductAutocomplete
             value={formData.productName}
             onChange={(value) => setFormData({...formData, productName: value})}
@@ -159,7 +169,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Etiquetas (Split Items)</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Etiquetas (Split Items)
+            <HelpTooltip content="Si agregas etiquetas separadas por comas (Ej: rojo, azul, verde), el sistema dividirá la cantidad total entre ellas. Útil cuando compras un mismo producto en diferentes variantes." />
+          </label>
           <div className="relative group">
              <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
              <input
@@ -175,7 +188,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap">Cantidad Total *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap flex items-center">
+              Cantidad Total *
+              <HelpTooltip content={purchasesFieldHelp.quantity} />
+            </label>
             <div className="relative group">
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
                 <input
@@ -189,7 +205,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap">Costo Total *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 whitespace-nowrap flex items-center">
+              Costo Total *
+              <HelpTooltip content={purchasesFieldHelp.unitCost.replace('Precio por CAJA', 'Dinero total que pagas')} />
+            </label>
             <div className="relative group">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
                 <input
@@ -206,7 +225,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Descripción Adicional</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Descripción Adicional
+            <HelpTooltip content={purchasesFieldHelp.notes} />
+          </label>
           <div className="relative group">
              <FileText className="absolute left-3 top-3 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
              <textarea
@@ -235,7 +257,7 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
           </div>
         </div>
 
-        <Button 
+        <Button
           type="submit"
           className="w-full h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold shadow-lg shadow-red-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
@@ -243,6 +265,12 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
           Registrar Compra
         </Button>
       </form>
+
+      <HelpPanel
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        helpContent={purchasesHelp}
+      />
     </motion.div>
   );
 };
