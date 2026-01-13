@@ -27,13 +27,21 @@ export const getUserBasePoints = async (userId) => {
       if (error.code === 'PGRST116') {
         return { data: { base_points: 0 }, error: null };
       }
+
+      // Si la tabla no existe, retornar 0 sin error
+      if (error.message?.includes('does not exist') || error.code === '42P01') {
+        console.warn('[pointsService] Tabla user_points no existe. Ejecuta el SQL en Supabase.');
+        return { data: { base_points: 0 }, error: null };
+      }
+
       throw error;
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('[pointsService] Error getting base points:', error);
-    return { data: null, error };
+    console.error('[pointsService] Error getting base points:', error.message || error);
+    // Retornar 0 por defecto en lugar de fallar
+    return { data: { base_points: 0 }, error: null };
   }
 };
 

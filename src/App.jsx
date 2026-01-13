@@ -289,14 +289,33 @@ function App() {
     if (!user) return;
 
     const list = Array.isArray(newTxns) ? newTxns : [newTxns];
-    
+
+    console.log('[handleAddTransaction] Nueva transacción:', {
+      count: list.length,
+      firstItem: list[0],
+      hasProductId: list.length > 0 && !!list[0].productId
+    });
+
     try {
       // Si las transacciones vienen del nuevo sistema (tienen productId), ya están guardadas
       // Recargar TODO desde la BD para asegurar datos actualizados
       if (list.length > 0 && list[0].productId) {
+        console.log('[handleAddTransaction] Sistema V2 detectado, recargando desde BD...');
+
         // Recargar transacciones desde la BD
         const { data: transactionsDataV2, error: transactionsErrorV2 } = await getTransactionsV2(user.id);
+
+        console.log('[handleAddTransaction] Resultado recarga:', {
+          count: transactionsDataV2?.length,
+          error: transactionsErrorV2?.message
+        });
+
+        if (transactionsErrorV2) {
+          console.error('[handleAddTransaction] Error recargando transacciones:', transactionsErrorV2);
+        }
+
         if (!transactionsErrorV2 && transactionsDataV2) {
+          console.log('[handleAddTransaction] ✅ Actualizando estado con', transactionsDataV2.length, 'transacciones');
           setTransactions(transactionsDataV2);
           recalculateInventory(transactionsDataV2);
           extractCampaigns(transactionsDataV2);
