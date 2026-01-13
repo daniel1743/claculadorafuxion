@@ -20,8 +20,14 @@ import { useTooltips } from '@/contexts/TooltipContext';
 const HelpTooltip = ({ content, position = "top", className = "" }) => {
   const { tooltipsEnabled } = useTooltips();
 
+  // DEBUG: Log para verificar rendering
+  console.log('[HelpTooltip] Rendering:', { tooltipsEnabled, content: content?.substring(0, 30) });
+
   // No renderizar nada si los tooltips están desactivados
-  if (!tooltipsEnabled) return null;
+  if (!tooltipsEnabled) {
+    console.log('[HelpTooltip] OCULTO - tooltipsEnabled es false');
+    return null;
+  }
 
   return (
     <TooltipProvider delayDuration={200}>

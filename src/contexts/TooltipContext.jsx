@@ -14,16 +14,30 @@ export const TooltipProvider = ({ children }) => {
   // Leer preferencia de localStorage o habilitar por defecto
   const [tooltipsEnabled, setTooltipsEnabled] = useState(() => {
     const saved = localStorage.getItem('tooltips_enabled');
-    return saved !== null ? JSON.parse(saved) : true; // Por defecto: activados
+    const enabled = saved !== null ? JSON.parse(saved) : true; // Por defecto: activados
+
+    // DEBUG: Log para verificar estado
+    console.log('[TooltipContext] Inicializando tooltips:', {
+      localStorage: saved,
+      parsed: enabled,
+      defaultUsed: saved === null
+    });
+
+    return enabled;
   });
 
   // Guardar preferencia en localStorage cuando cambie
   useEffect(() => {
+    console.log('[TooltipContext] Guardando preferencia:', tooltipsEnabled);
     localStorage.setItem('tooltips_enabled', JSON.stringify(tooltipsEnabled));
   }, [tooltipsEnabled]);
 
   const toggleTooltips = () => {
-    setTooltipsEnabled(prev => !prev);
+    setTooltipsEnabled(prev => {
+      const newValue = !prev;
+      console.log('[TooltipContext] Toggle:', prev, '->', newValue);
+      return newValue;
+    });
   };
 
   return (
