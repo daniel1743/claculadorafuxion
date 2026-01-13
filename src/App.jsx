@@ -39,7 +39,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   // INVENTARIO TOTAL: Calcular desde productos V2 (fuente de verdad)
-  const totalInventory = products.reduce((sum, product) => {
+  const totalInventory = (Array.isArray(products) ? products : []).reduce((sum, product) => {
     return sum + (product.currentStockBoxes || 0);
   }, 0);
 

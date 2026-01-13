@@ -159,6 +159,8 @@ export const calculateProductMetrics = (transactions, product) => {
  * @returns {number} Valor total del inventario
  */
 export const calculateInventoryValue = (products) => {
+  if (!Array.isArray(products)) return 0;
+
   let totalValue = 0;
 
   products.forEach(product => {

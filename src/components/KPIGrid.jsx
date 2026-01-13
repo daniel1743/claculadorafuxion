@@ -193,7 +193,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }))
         .slice(0, 3);
 
-    const productList = products
+    const productList = (Array.isArray(products) ? products : [])
         .filter(p => p.currentStockBoxes > 0) // Solo productos con stock
         .sort((a,b) => b.currentStockBoxes - a.currentStockBoxes)
         .slice(0, 3)
