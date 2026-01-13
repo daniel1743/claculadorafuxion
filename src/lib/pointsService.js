@@ -159,7 +159,7 @@ export const calculatePurchasePoints = async (userId) => {
 /**
  * Obtiene el total de puntos del usuario (base + compras)
  * @param {string} userId - ID del usuario
- * @returns {Promise<{data: {base_points: number, purchase_points: number, total_points: number, rank: string, progress: number}|null, error: Error|null}>}
+ * @returns {Promise<{data: {base_points: number, purchase_points: number, total_points: number}|null, error: Error|null}>}
  */
 export const getUserTotalPoints = async (userId) => {
   try {
@@ -176,18 +176,11 @@ export const getUserTotalPoints = async (userId) => {
     const purchasePoints = purchaseData?.purchase_points || 0;
     const totalPoints = basePoints + purchasePoints;
 
-    // Calcular rango y progreso
-    const { rank, progress, nextRank, pointsToNext } = calculateRankAndProgress(totalPoints);
-
     return {
       data: {
         base_points: basePoints,
         purchase_points: purchasePoints,
-        total_points: totalPoints,
-        rank,
-        progress,
-        nextRank,
-        pointsToNext
+        total_points: totalPoints
       },
       error: null
     };
@@ -197,56 +190,4 @@ export const getUserTotalPoints = async (userId) => {
   }
 };
 
-/**
- * Sistema de rangos
- */
-const RANKS = [
-  { name: 'Principiante', min: 0, max: 999, color: '#9ca3af' },
-  { name: 'Líder', min: 1000, max: 4999, color: '#3b82f6' },
-  { name: 'Líder X', min: 5000, max: 9999, color: '#8b5cf6' },
-  { name: 'Élite', min: 10000, max: Infinity, color: '#eab308' }
-];
-
-/**
- * Calcula el rango y progreso hacia el siguiente
- * @param {number} totalPoints - Total de puntos
- * @returns {{rank: string, progress: number, nextRank: string|null, pointsToNext: number|null}}
- */
-export const calculateRankAndProgress = (totalPoints) => {
-  // Encontrar el rango actual
-  const currentRank = RANKS.find(r => totalPoints >= r.min && totalPoints <= r.max) || RANKS[0];
-
-  // Encontrar el siguiente rango
-  const currentIndex = RANKS.indexOf(currentRank);
-  const nextRank = RANKS[currentIndex + 1] || null;
-
-  // Calcular progreso
-  let progress = 0;
-  let pointsToNext = null;
-
-  if (nextRank) {
-    const pointsInCurrentRank = totalPoints - currentRank.min;
-    const pointsNeededForNextRank = nextRank.min - currentRank.min;
-    progress = Math.min((pointsInCurrentRank / pointsNeededForNextRank) * 100, 100);
-    pointsToNext = nextRank.min - totalPoints;
-  } else {
-    // Ya está en el rango máximo
-    progress = 100;
-  }
-
-  return {
-    rank: currentRank.name,
-    rankColor: currentRank.color,
-    progress: Math.round(progress),
-    nextRank: nextRank?.name || null,
-    pointsToNext: pointsToNext > 0 ? pointsToNext : null
-  };
-};
-
-/**
- * Obtiene todos los rangos disponibles
- * @returns {Array} Lista de rangos
- */
-export const getAllRanks = () => {
-  return RANKS;
-};
+// Rangos removidos - Se implementarán manualmente más adelante según necesidades del negocio

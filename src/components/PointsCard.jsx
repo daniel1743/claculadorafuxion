@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Edit2, Award, TrendingUp, Gift } from 'lucide-react';
+import { Trophy, Edit2, TrendingUp, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { getUserTotalPoints } from '@/lib/pointsService';
@@ -13,12 +13,7 @@ const PointsCard = ({ userId, refreshTrigger = 0 }) => {
   const [pointsData, setPointsData] = useState({
     base_points: 0,
     purchase_points: 0,
-    total_points: 0,
-    rank: 'Principiante',
-    rankColor: '#9ca3af',
-    progress: 0,
-    nextRank: null,
-    pointsToNext: null
+    total_points: 0
   });
 
   const loadPoints = async () => {
@@ -104,55 +99,14 @@ const PointsCard = ({ userId, refreshTrigger = 0 }) => {
         </div>
 
         {/* Total de Puntos */}
-        <div className="mb-6 relative z-10">
-          <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
+        <div className="mb-8 relative z-10">
+          <div className="flex items-baseline gap-2 justify-center">
+            <span className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">
               {pointsData.total_points.toLocaleString()}
             </span>
-            <span className="text-gray-400 text-sm font-semibold">PTS</span>
+            <span className="text-gray-400 text-lg font-semibold">PTS</span>
           </div>
-        </div>
-
-        {/* Rango Actual */}
-        <div className="mb-4 p-3 rounded-xl bg-white/5 border border-white/10 relative z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Award className="w-5 h-5" style={{ color: pointsData.rankColor }} />
-              <div>
-                <p className="text-xs text-gray-400">Rango Actual</p>
-                <p className="text-lg font-bold" style={{ color: pointsData.rankColor }}>
-                  {pointsData.rank}
-                </p>
-              </div>
-            </div>
-            {pointsData.nextRank && (
-              <div className="text-right">
-                <p className="text-xs text-gray-400">Siguiente</p>
-                <p className="text-sm font-semibold text-gray-300">{pointsData.nextRank}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Barra de Progreso */}
-          {pointsData.nextRank && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Progreso</span>
-                <span>{pointsData.progress}%</span>
-              </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-yellow-400 to-yellow-600 transition-all duration-500"
-                  style={{ width: `${pointsData.progress}%` }}
-                ></div>
-              </div>
-              {pointsData.pointsToNext > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Faltan <span className="text-yellow-400 font-semibold">{pointsData.pointsToNext.toLocaleString()}</span> puntos
-                </p>
-              )}
-            </div>
-          )}
+          <p className="text-center text-gray-500 text-sm mt-2">Puntos Totales Acumulados</p>
         </div>
 
         {/* Desglose de Puntos */}
