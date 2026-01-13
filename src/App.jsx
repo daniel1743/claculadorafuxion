@@ -42,13 +42,37 @@ function App() {
 
   // Cargar datos del usuario autenticado
   const loadUserData = async (userId) => {
+    // Timeout de seguridad para toda la función
+    const timeoutId = setTimeout(() => {
+      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 30 segundos');
+      setLoading(false);
+      toast({
+        title: "Carga lenta",
+        description: "Los datos están tardando en cargar. Intenta recargar la página.",
+        variant: "destructive"
+      });
+    }, 30000);
+
     try {
       console.log('[App] loadUserData iniciado para userId:', userId);
       setLoading(true);
-      
-      // Cargar transacciones V2 (con productos)
+
+      // Cargar transacciones V2 (con productos) con timeout
       console.log('[App] Cargando transacciones V2...');
-      const { data: transactionsDataV2, error: transactionsErrorV2 } = await getTransactionsV2(userId);
+      const transactionsPromise = getTransactionsV2(userId);
+      const transactionsTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout transacciones')), 15000)
+      );
+
+      let transactionsDataV2, transactionsErrorV2;
+      try {
+        const result = await Promise.race([transactionsPromise, transactionsTimeout]);
+        transactionsDataV2 = result.data;
+        transactionsErrorV2 = result.error;
+      } catch (timeoutError) {
+        console.warn('[App] ⏱️ Timeout en transacciones V2, continuando sin ellas');
+        transactionsErrorV2 = timeoutError;
+      }
       console.log('[App] Transacciones V2:', { data: transactionsDataV2, error: transactionsErrorV2 });
       
       if (transactionsErrorV2) {
@@ -124,6 +148,7 @@ function App() {
         variant: "destructive"
       });
     } finally {
+      clearTimeout(timeoutId); // Limpiar timeout de seguridad
       console.log('[App] loadUserData finalizado, setLoading(false)');
       setLoading(false);
     }
