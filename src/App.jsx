@@ -38,7 +38,10 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const totalInventory = Object.values(inventoryMap).reduce((sum, qty) => sum + qty, 0);
+  // INVENTARIO TOTAL: Calcular desde productos V2 (fuente de verdad)
+  const totalInventory = products.reduce((sum, product) => {
+    return sum + (product.currentStockBoxes || 0);
+  }, 0);
 
   // Cargar datos del usuario autenticado
   const loadUserData = async (userId) => {

@@ -10,34 +10,58 @@ import {
 import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock } from 'lucide-react';
 import { formatCLP } from '@/lib/utils';
 
-const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [] }) => {
-  
+const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [], products = [], inventoryMap = {} }) => {
+
   const modalData = useMemo(() => {
-    if (!transactions) return { rows: [], summary: {} };
+    if (!transactions && !products) return { rows: [], summary: {} };
 
     let rows = [];
     let summary = {};
 
     if (type === 'inventory') {
-        const map = {};
-        transactions.forEach(t => {
-            const name = t.productName;
-            if (!map[name]) map[name] = { name, quantity: 0, lastDate: t.date, totalCost: 0, unitsBought: 0 };
-            
-            if (new Date(t.date) > new Date(map[name].lastDate)) map[name].lastDate = t.date;
+        // USAR PRODUCTOS V2 (fuente de verdad)
+        if (products && products.length > 0) {
+            rows = products
+                .filter(p => p.currentStockBoxes > 0 || p.currentMarketingStock > 0)
+                .map(p => ({
+                    name: p.name,
+                    quantity: p.currentStockBoxes,
+                    marketingStock: p.currentMarketingStock || 0,
+                    weightedAverageCost: p.weightedAverageCost || 0,
+                    listPrice: p.listPrice || 0,
+                    totalValue: (p.currentStockBoxes * p.weightedAverageCost) || 0
+                }));
 
-            if (t.type === 'compra') {
-                const free = t.freeUnits || 0;
-                const totalUnits = t.quantity + free;
-                map[name].quantity += totalUnits;
-                map[name].unitsBought += totalUnits;
-                map[name].totalCost += t.total;
-            } else if (t.type === 'venta') {
-                map[name].quantity -= t.quantity;
-            }
-        });
-        rows = Object.values(map).filter(i => i.quantity !== 0);
-        summary = { totalItems: rows.length, totalUnits: rows.reduce((a,b) => a + b.quantity, 0) };
+            const totalBoxes = rows.reduce((a, b) => a + b.quantity, 0);
+            const totalValue = rows.reduce((a, b) => a + b.totalValue, 0);
+
+            summary = {
+                totalItems: rows.length,
+                totalUnits: totalBoxes,
+                totalValue: totalValue
+            };
+        } else {
+            // Fallback: calcular desde transacciones (sistema antiguo)
+            const map = {};
+            transactions.forEach(t => {
+                const name = t.productName;
+                if (!map[name]) map[name] = { name, quantity: 0, lastDate: t.date, totalCost: 0, unitsBought: 0 };
+
+                if (new Date(t.date) > new Date(map[name].lastDate)) map[name].lastDate = t.date;
+
+                if (t.type === 'compra') {
+                    const free = t.freeUnits || 0;
+                    const totalUnits = t.quantity + free;
+                    map[name].quantity += totalUnits;
+                    map[name].unitsBought += totalUnits;
+                    map[name].totalCost += t.total;
+                } else if (t.type === 'venta') {
+                    map[name].quantity -= t.quantity;
+                }
+            });
+            rows = Object.values(map).filter(i => i.quantity !== 0);
+            summary = { totalItems: rows.length, totalUnits: rows.reduce((a, b) => a + b.quantity, 0) };
+        }
     } 
     else if (type === 'ads') {
         const campMap = {};
@@ -133,11 +157,15 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                     <>
                         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                             <div className="text-xs text-gray-400 uppercase">Total Productos</div>
-                            <div className="text-2xl font-bold text-white">{modalData.summary.totalItems}</div>
+                            <div className="text-2xl font-bold text-white">{modalData.summary.totalItems || 0}</div>
                         </div>
                         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <div className="text-xs text-gray-400 uppercase">Unidades en Stock</div>
-                            <div className="text-2xl font-bold text-blue-400">{modalData.summary.totalUnits}</div>
+                            <div className="text-xs text-gray-400 uppercase">Cajas en Stock</div>
+                            <div className="text-2xl font-bold text-blue-400">{modalData.summary.totalUnits || 0}</div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Valor Total (PPP)</div>
+                            <div className="text-2xl font-bold text-green-400">{formatCLP(modalData.summary.totalValue || 0)}</div>
                         </div>
                     </>
                 )}
@@ -170,8 +198,8 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                             <>
                                 <th className="px-4 py-3 rounded-tl-lg">Producto</th>
                                 <th className="px-4 py-3 text-right">Stock</th>
-                                <th className="px-4 py-3 text-right">Costo Prom.</th>
-                                <th className="px-4 py-3 text-right rounded-tr-lg">Última Actualización</th>
+                                <th className="px-4 py-3 text-right">PPP (Costo)</th>
+                                <th className="px-4 py-3 text-right rounded-tr-lg">Valor Total</th>
                             </>
                         )}
                         {type === 'ads' && (
@@ -207,11 +235,16 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                              {type === 'inventory' && (
                                 <>
                                     <td className="px-4 py-3 font-medium text-white">{row.name}</td>
-                                    <td className="px-4 py-3 text-right text-blue-300 font-mono">{row.quantity}</td>
-                                    <td className="px-4 py-3 text-right text-gray-400 font-mono">
-                                        {formatCLP(row.unitsBought > 0 ? row.totalCost/row.unitsBought : 0)}
+                                    <td className="px-4 py-3 text-right text-blue-300 font-mono">
+                                        {row.quantity} cajas
+                                        {row.marketingStock > 0 && <span className="text-xs text-gray-500 block">+ {row.marketingStock} sobres</span>}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-gray-500">{new Date(row.lastDate).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3 text-right text-gray-400 font-mono">
+                                        {formatCLP(row.weightedAverageCost || 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-green-400 font-mono font-bold">
+                                        {formatCLP(row.totalValue || 0)}
+                                    </td>
                                 </>
                             )}
                             {type === 'ads' && (
