@@ -19,7 +19,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthModal from '@/components/AuthModal';
 import UserProfile from '@/components/UserProfile';
-import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
+import { signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice } from '@/lib/supabaseService';
 import { getTransactionsV2 } from '@/lib/transactionServiceV2';
 import { getUserProductsWithInventory } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
@@ -160,213 +160,55 @@ function App() {
     }
   };
 
-  // Verificar sesión al cargar
+  // Verificar sesión al cargar - SIMPLIFICADO
   useEffect(() => {
-    console.log('[App] useEffect inicial - verificando sesión...');
-    let isMounted = true;
-    
-    const checkSession = async () => {
-      console.log('[App] 🔍 Iniciando checkSession...');
+    console.log('[App] 🚀 Iniciando app...');
 
+    const init = async () => {
       try {
-        // Importar Supabase
         const { supabase } = await import('@/lib/supabase');
-        console.log('[App] ✅ Supabase importado');
 
-        if (!supabase) {
-          console.error('[App] ❌ Supabase es null - variables .env no cargadas');
+        // Intentar obtener sesión actual
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          console.log('[App] Sin sesión - mostrando login');
           setAuthModalOpen(true);
           setLoading(false);
           return;
         }
 
-        // NUEVO: Intentar primero con método síncrono
-        console.log('[App] 🔄 Intentando obtener sesión desde localStorage...');
-
-        const localSession = localStorage.getItem('supabase.auth.token');
-        console.log('[App] 📦 Sesión en localStorage:', !!localSession);
-
-        if (!localSession) {
-          console.log('[App] ℹ️ No hay sesión guardada, mostrando login');
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        // Si hay sesión local, intentar getSession con timeout
-        console.log('[App] 🔄 Llamando getSession()...');
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentado de 5s a 30s
-
-        let sessionResult;
-        try {
-          // Usar fetch manual para mayor control
-          const response = await fetch(`${supabase.supabaseUrl}/auth/v1/user`, {
-            headers: {
-              'apikey': supabase.supabaseKey,
-              'Authorization': `Bearer ${JSON.parse(localSession).access_token}`
-            },
-            signal: controller.signal
-          });
-
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const userData = await response.json();
-            console.log('[App] ✅ Usuario validado:', userData.email);
-
-            // Crear objeto de sesión manualmente
-            sessionResult = {
-              data: {
-                session: {
-                  user: userData,
-                  access_token: JSON.parse(localSession).access_token
-                }
-              },
-              error: null
-            };
-          } else {
-            console.log('[App] ⚠️ Token inválido o expirado');
-            localStorage.removeItem('supabase.auth.token');
-            setAuthModalOpen(true);
-            setLoading(false);
-            return;
-          }
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          console.error('[App] ❌ Error validando sesión:', fetchError.message);
-
-          // Si es abort/timeout, mostrar login
-          if (fetchError.name === 'AbortError') {
-            console.error('[App] ⏱️ TIMEOUT: La validación tardó más de 30s');
-          }
-
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        const { data: { session }, error: sessionError } = sessionResult;
-        console.log('[App] 📊 Resultado:', {
-          hasSession: !!session,
-          hasError: !!sessionError,
-          userId: session?.user?.id
-        });
-
-        if (!isMounted) {
-          console.log('[App] ⚠️ Componente desmontado, abortando');
-          return;
-        }
-
-        // Sin sesión o con error -> mostrar login
-        if (sessionError || !session) {
-          console.log('[App] 🔓 Sin sesión válida, mostrando login');
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        const currentUser = session.user;
-        console.log('[App] 👤 Usuario encontrado:', currentUser.email);
-        console.log('[App] 👤 Usuario ID:', currentUser.id);
-
-        // Obtener perfil con timeout reducido
-        console.log('[App] 🔄 Obteniendo perfil...');
-        let profileData = null;
-
-        try {
-          const profilePromise = getUserProfile(currentUser.id);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
-              console.log('[App] ⏱️ Timeout de perfil alcanzado (10s)');
-              reject(new Error('Timeout obteniendo perfil'));
-            }, 10000); // Reducido a 10 segundos
-          });
-
-          console.log('[App] 🏁 Iniciando race entre perfil y timeout...');
-          const result = await Promise.race([profilePromise, timeoutPromise]);
-          console.log('[App] 🏁 Race completado, resultado:', result);
-          profileData = result.data;
-
-          if (result.error) {
-            console.warn('[App] ⚠️ Error obteniendo perfil:', result.error.message);
-          } else {
-            console.log('[App] ✅ Perfil obtenido:', profileData?.name);
-          }
-        } catch (error) {
-          console.warn('[App] ⚠️ Timeout/Error obteniendo perfil, continuando sin él:', error.message);
-        }
-
-        const userData = {
-          id: currentUser.id,
-          email: currentUser.email,
-          name: profileData?.name || currentUser.email?.split('@')[0] || 'Usuario',
-          avatar: profileData?.avatar_url || null
-        };
-
-        console.log('[App] 👤 Usuario preparado:', userData.name);
-
-        if (isMounted) {
-          setUser(userData);
-          console.log('[App] 📦 Cargando datos del usuario...');
-          await loadUserData(currentUser.id);
-          console.log('[App] ✅ CheckSession completado exitosamente');
-        }
-      } catch (error) {
-        console.error('[App] 💥 ERROR en checkSession:', error.message);
-        console.error('[App] Stack:', error.stack);
-
-        if (isMounted) {
-          setAuthModalOpen(true);
-          setLoading(false);
-        }
-      }
-    };
-
-    checkSession();
-
-    // Escuchar cambios en la autenticación
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        setUser(null);
-        setTransactions([]);
-        setPrices({});
-        setInventoryMap({});
-        setCampaigns([]);
-        setLoans([]);
-        setAuthModalOpen(true);
-      } else if (event === 'SIGNED_IN' && session.user) {
-        let { data: profileData } = await getUserProfile(session.user.id);
-
-        // Si no existe el perfil, crearlo
-        if (!profileData) {
-          const { data: newProfile } = await createUserProfile(
-            session.user.id,
-            session.user.email?.split('@')[0] || 'Usuario',
-            session.user.email
-          );
-          profileData = newProfile;
-        }
+        // Sesión válida - preparar usuario
+        console.log('[App] ✅ Sesión encontrada:', session.user.email);
 
         const userData = {
           id: session.user.id,
           email: session.user.email,
-          name: profileData?.name || session.user.email?.split('@')[0] || 'Usuario',
-          avatar: profileData?.avatar_url || null
+          name: session.user.email.split('@')[0],
+          avatar: null
         };
 
         setUser(userData);
-        await loadUserData(session.user.id);
-      }
-    });
 
-    return () => {
-      console.log('[App] Cleanup useEffect - desmontando');
-      isMounted = false;
-      subscription.unsubscribe();
+        // Cargar datos del usuario (sin bloquear)
+        console.log('[App] 📦 Cargando datos...');
+        await loadUserData(session.user.id);
+
+        console.log('[App] ✅ Carga completada');
+      } catch (error) {
+        console.error('[App] Error en init:', error);
+        setAuthModalOpen(true);
+        setLoading(false);
+      }
     };
-  }, []); // Dependencias vacías para que solo se ejecute una vez
+
+    init();
+
+    // Cleanup vacío - no necesitamos listeners
+    return () => {
+      console.log('[App] Cleanup useEffect');
+    };
+  }, []);
 
   // Recargar productos cuando cambian las transacciones
   useEffect(() => {
