@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { signUp, signIn, getUserProfile, createUserProfile } from '@/lib/supabaseService';
+import { signUp, signIn } from '@/lib/supabaseService';
 
 const AuthModal = ({ isOpen, onLogin }) => {
   const { toast } = useToast();
@@ -38,67 +38,44 @@ const AuthModal = ({ isOpen, onLogin }) => {
 
     try {
       if (isRegistering) {
-        // Registro de nuevo usuario
+        // Registro de nuevo usuario - SIMPLIFICADO
         const { data, error } = await signUp(formData.email, formData.password, formData.name);
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         if (data?.user) {
-          // Intentar obtener el perfil del usuario
-          let { data: profileData } = await getUserProfile(data.user.id);
-
-          // Si no existe el perfil, crearlo
-          if (!profileData) {
-            const { data: newProfile, error: createError } = await createUserProfile(
-              data.user.id,
-              formData.name,
-              data.user.email
-            );
-
-            if (!createError && newProfile) {
-              profileData = newProfile;
-            }
-          }
-
           const user = {
             id: data.user.id,
             email: data.user.email,
-            name: profileData?.name || formData.name || data.user.email?.split('@')[0] || 'Usuario',
-            avatar: profileData?.avatar_url || null
+            name: formData.name || data.user.email.split('@')[0],
+            avatar: null
           };
 
           onLogin(user);
           toast({
             title: "¡Bienvenido!",
-            description: `Cuenta creada exitosamente para ${user.name}`,
+            description: `Cuenta creada para ${user.name}`,
             className: "bg-green-900 border-green-600 text-white"
           });
         }
       } else {
-        // Inicio de sesión
+        // Inicio de sesión - SIMPLIFICADO
         const { data, error } = await signIn(formData.email, formData.password);
-        
-        if (error) {
-          throw error;
-        }
+
+        if (error) throw error;
 
         if (data?.user) {
-          // Obtener el perfil del usuario
-          const { data: profileData } = await getUserProfile(data.user.id);
-          
           const user = {
             id: data.user.id,
             email: data.user.email,
-            name: profileData?.name || data.user.email?.split('@')[0] || 'Usuario',
-            avatar: profileData?.avatar_url || null
+            name: data.user.email.split('@')[0],
+            avatar: null
           };
 
           onLogin(user);
           toast({
             title: "Sesión Iniciada",
-            description: "Acceso concedido al dashboard.",
+            description: "Acceso concedido.",
             className: "bg-blue-900 border-blue-600 text-white"
           });
         }
