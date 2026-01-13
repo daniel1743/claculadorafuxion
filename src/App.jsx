@@ -13,6 +13,7 @@ import LoanModule from '@/components/LoanModule';
 import LoanRepaymentModule from '@/components/LoanRepaymentModule';
 import PriceManagement from '@/components/PriceManagement';
 import KPIGrid from '@/components/KPIGrid';
+import PointsCard from '@/components/PointsCard';
 import ChartsSection from '@/components/ChartsSection';
 import DataTable from '@/components/DataTable';
 import { Toaster } from '@/components/ui/toaster';
@@ -575,6 +576,11 @@ function App() {
             {/* 2. KPI Cards Grid */}
             <section>
                 <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} products={products} loans={loans} />
+            </section>
+
+            {/* 2.5. Points Card */}
+            <section>
+                <PointsCard userId={user?.id} refreshTrigger={transactions.length} />
             </section>
 
             {/* 3. Charts Section */}
