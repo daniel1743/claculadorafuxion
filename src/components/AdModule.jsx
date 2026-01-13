@@ -4,9 +4,13 @@ import { motion } from 'framer-motion';
 import { Plus, Megaphone, Calendar, DollarSign, FileText, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import HelpTooltip from '@/components/HelpTooltip';
+import HelpPanel, { HelpButton } from '@/components/HelpPanel';
+import { advertisingHelp, advertisingFieldHelp } from '@/lib/helpContent';
 
 const AdModule = ({ onAdd }) => {
   const { toast } = useToast();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [formData, setFormData] = useState({
     campaignName: '',
     description: '',
@@ -87,14 +91,20 @@ const AdModule = ({ onAdd }) => {
       transition={{ delay: 0.1 }}
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6 h-full"
     >
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-blue-500 rounded-full"></span>
-        Nueva Campaña
-      </h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <span className="w-1 h-6 bg-blue-500 rounded-full"></span>
+          Nueva Campaña
+        </h3>
+        <HelpButton onClick={() => setHelpOpen(true)} className="text-xs" />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Nombre Campaña *</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Nombre Campaña *
+            <HelpTooltip content={advertisingFieldHelp.campaignName} />
+          </label>
           <div className="relative group">
              <Megaphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
              <input
@@ -108,7 +118,10 @@ const AdModule = ({ onAdd }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Etiquetas (Split Cost)</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Etiquetas (Split Cost)
+            <HelpTooltip content="Si agregas etiquetas separadas por comas (Ej: Facebook, Instagram, Google), la inversión total se dividirá equitativamente entre ellas para analizar ROI por plataforma." />
+          </label>
           <div className="relative group">
              <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
              <input
@@ -123,7 +136,10 @@ const AdModule = ({ onAdd }) => {
 
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Fecha Inicio</label>
+              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+                Fecha Inicio
+                <HelpTooltip content={advertisingFieldHelp.startDate} />
+              </label>
               <div className="relative group">
                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                  <input
@@ -136,7 +152,10 @@ const AdModule = ({ onAdd }) => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Inversión *</label>
+              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+                Inversión *
+                <HelpTooltip content={advertisingFieldHelp.amount} />
+              </label>
               <div className="relative group">
                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                  <input
@@ -153,7 +172,10 @@ const AdModule = ({ onAdd }) => {
         </div>
 
         <div className="space-y-2">
-           <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Descripción</label>
+           <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+             Descripción
+             <HelpTooltip content={advertisingFieldHelp.notes} />
+           </label>
            <div className="relative group">
              <FileText className="absolute left-3 top-3 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
              <textarea
@@ -171,7 +193,7 @@ const AdModule = ({ onAdd }) => {
            </p>
         </div>
 
-        <Button 
+        <Button
           type="submit"
           className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
@@ -179,6 +201,12 @@ const AdModule = ({ onAdd }) => {
           Registrar Inversión
         </Button>
       </form>
+
+      <HelpPanel
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        helpContent={advertisingHelp}
+      />
     </motion.div>
   );
 };
