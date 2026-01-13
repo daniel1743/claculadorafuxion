@@ -25,6 +25,7 @@ import { getUserProductsWithInventory } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
 import { useToast } from '@/components/ui/use-toast';
 import ErrorDebugger from '@/components/ErrorDebugger';
+import { TooltipProvider } from '@/contexts/TooltipContext';
 
 function App() {
   const { toast } = useToast();
@@ -512,12 +513,12 @@ function App() {
   };
 
   return (
-    <>
+    <TooltipProvider>
       <Helmet>
         <title>Dashboard Financiero Premium</title>
         <meta name="description" content="Control total de Compras, Ventas, Publicidad y Ganancias." />
       </Helmet>
-      
+
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white font-sans selection:bg-yellow-500/30">
         <Toaster />
         <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
@@ -730,7 +731,7 @@ function App() {
         {/* Error Debugger - Siempre activo para detectar problemas */}
         <ErrorDebugger enabled={true} />
       </div>
-    </>
+    </TooltipProvider>
   );
 }
 

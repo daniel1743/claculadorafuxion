@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { User, LogOut, Camera, X, Check } from 'lucide-react';
+import { User, LogOut, Camera, X, Check, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { useTooltips } from '@/contexts/TooltipContext';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import {
 
 const UserProfile = ({ user, onLogout, onUpdateUser }) => {
   const { toast } = useToast();
+  const { tooltipsEnabled, toggleTooltips } = useTooltips();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
   const [previewImage, setPreviewImage] = useState(user?.avatar || null);
@@ -46,6 +48,19 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
         title: "Perfil Actualizado",
         description: "Los cambios se han guardado correctamente.",
         className: "bg-green-900 border-green-600 text-white"
+    });
+  };
+
+  const handleToggleTooltips = () => {
+    toggleTooltips();
+    toast({
+      title: tooltipsEnabled ? "Ayudas Desactivadas" : "Ayudas Activadas",
+      description: tooltipsEnabled
+        ? "Los tooltips de ayuda ahora están ocultos"
+        : "Los tooltips de ayuda ahora están visibles",
+      className: tooltipsEnabled
+        ? "bg-gray-800 border-gray-600 text-white"
+        : "bg-yellow-900 border-yellow-600 text-white"
     });
   };
 
@@ -76,6 +91,10 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
           <DropdownMenuItem onClick={() => setIsModalOpen(true)} className="cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:text-white">
             <User className="mr-2 h-4 w-4" />
             <span>Editar Perfil</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleToggleTooltips} className="cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:text-white">
+            <HelpCircle className="mr-2 h-4 w-4" />
+            <span>{tooltipsEnabled ? "Ocultar Ayudas" : "Mostrar Ayudas"}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/10" />
           <DropdownMenuItem onClick={onLogout} className="cursor-pointer text-red-400 hover:bg-red-900/20 hover:text-red-300 focus:bg-red-900/20 focus:text-red-300">
