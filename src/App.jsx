@@ -42,36 +42,42 @@ function App() {
 
   // Cargar datos del usuario autenticado
   const loadUserData = async (userId) => {
-    // Timeout de seguridad para toda la función
+    // Timeout de seguridad para toda la función - reducido a 20 segundos
     const timeoutId = setTimeout(() => {
-      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 30 segundos');
+      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 20 segundos');
+      console.error('[App] Forzando carga para evitar pantalla negra infinita');
       setLoading(false);
       toast({
-        title: "Carga lenta",
-        description: "Los datos están tardando en cargar. Intenta recargar la página.",
+        title: "⚠️ Carga Incompleta",
+        description: "Algunos datos no pudieron cargarse. La app puede tener datos limitados.",
         variant: "destructive"
       });
-    }, 30000);
+    }, 20000);
 
     try {
       console.log('[App] loadUserData iniciado para userId:', userId);
       setLoading(true);
 
-      // Cargar transacciones V2 (con productos) con timeout
+      // Cargar transacciones V2 (con productos) con timeout reducido
       console.log('[App] Cargando transacciones V2...');
       const transactionsPromise = getTransactionsV2(userId);
       const transactionsTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout transacciones')), 15000)
+        setTimeout(() => {
+          console.warn('[App] ⏱️ Timeout alcanzado en transacciones (8s)');
+          reject(new Error('Timeout transacciones'));
+        }, 8000)
       );
 
       let transactionsDataV2, transactionsErrorV2;
       try {
         const result = await Promise.race([transactionsPromise, transactionsTimeout]);
+        console.log('[App] ✅ Transacciones V2 respondieron:', result);
         transactionsDataV2 = result.data;
         transactionsErrorV2 = result.error;
       } catch (timeoutError) {
-        console.warn('[App] ⏱️ Timeout en transacciones V2, continuando sin ellas');
+        console.warn('[App] ⚠️ Timeout/Error en transacciones V2, continuando sin ellas:', timeoutError.message);
         transactionsErrorV2 = timeoutError;
+        transactionsDataV2 = [];
       }
       console.log('[App] Transacciones V2:', { data: transactionsDataV2, error: transactionsErrorV2 });
       
