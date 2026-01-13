@@ -45,30 +45,33 @@ function App() {
 
   // Cargar datos del usuario autenticado
   const loadUserData = async (userId) => {
-    // Timeout de seguridad para toda la función - reducido a 20 segundos
+    // Timeout de seguridad para toda la función - AUMENTADO a 30 segundos
     const timeoutId = setTimeout(() => {
-      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 20 segundos');
+      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 30 segundos');
       console.error('[App] Forzando carga para evitar pantalla negra infinita');
+      console.error('[App] PROBABLE CAUSA: Políticas RLS no configuradas en Supabase');
       setLoading(false);
       toast({
-        title: "⚠️ Carga Incompleta",
-        description: "Algunos datos no pudieron cargarse. La app puede tener datos limitados.",
-        variant: "destructive"
+        title: "⚠️ Timeout de Carga",
+        description: "La carga tardó demasiado. Verifica la consola del navegador y las políticas RLS de Supabase.",
+        variant: "destructive",
+        duration: 10000
       });
-    }, 20000);
+    }, 30000);
 
     try {
       console.log('[App] loadUserData iniciado para userId:', userId);
       setLoading(true);
 
-      // Cargar transacciones V2 (con productos) con timeout reducido
+      // Cargar transacciones V2 (con productos) con timeout AUMENTADO
       console.log('[App] Cargando transacciones V2...');
       const transactionsPromise = getTransactionsV2(userId);
       const transactionsTimeout = new Promise((_, reject) =>
         setTimeout(() => {
-          console.warn('[App] ⏱️ Timeout alcanzado en transacciones (8s)');
+          console.warn('[App] ⏱️ Timeout alcanzado en transacciones (15s)');
+          console.warn('[App] Esto sugiere que las políticas RLS no están configuradas correctamente');
           reject(new Error('Timeout transacciones'));
-        }, 8000)
+        }, 15000)
       );
 
       let transactionsDataV2, transactionsErrorV2;
