@@ -82,6 +82,8 @@ export const getTransactionsV2 = async (userId) => {
  * @param {string} [transaction.notes] - Notas adicionales
  * @param {number} [transaction.listPrice] - Precio de lista (para crear producto si no existe)
  * @param {number} [transaction.points] - Puntos Fuxion (para crear producto si no existe)
+ * @param {string} [transaction.customerId] - ID del cliente (para ventas CRM)
+ * @param {string} [transaction.saleType] - Tipo de venta: 'organic', 'frequent_customer', 'referral'
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const addTransactionV2 = async (transaction) => {
@@ -97,7 +99,9 @@ export const addTransactionV2 = async (transaction) => {
       totalAmount,
       notes = '',
       listPrice,
-      points = 0
+      points = 0,
+      customerId = null,
+      saleType = null
     } = transaction;
 
     // Validar tipo de transacción
@@ -141,7 +145,9 @@ export const addTransactionV2 = async (transaction) => {
       quantity_sachets: parseInt(quantitySachets) || 0,
       total_amount: parseFloat(totalAmount),
       unit_cost_snapshot: 0, // Se actualizará automáticamente por el trigger
-      notes: notes.trim()
+      notes: notes.trim(),
+      customer_id: customerId || null,
+      sale_type: saleType || null
     };
 
     const { data, error } = await supabase

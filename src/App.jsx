@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Users } from 'lucide-react';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
 import AdModule from '@/components/AdModule';
@@ -16,6 +16,8 @@ import KPIGrid from '@/components/KPIGrid';
 import PointsCard from '@/components/PointsCard';
 import ChartsSection from '@/components/ChartsSection';
 import DataTable from '@/components/DataTable';
+import CustomerManagement from '@/components/CustomerManagement';
+import RemindersCard from '@/components/RemindersCard';
 import { Toaster } from '@/components/ui/toaster';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthModal from '@/components/AuthModal';
@@ -602,6 +604,11 @@ function App() {
                 <PointsCard userId={user?.id} refreshTrigger={transactions.length} />
             </section> */}
 
+            {/* 2.6. Reminders Card - CRM Follow-up Reminders */}
+            <section>
+                <RemindersCard userId={user?.id} refreshTrigger={transactions.length} />
+            </section>
+
             {/* 3. Charts Section */}
             <section>
                 <ChartsSection transactions={transactions} />
@@ -633,6 +640,9 @@ function App() {
                     </TabsTrigger>
                     <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-6 py-2 transition-all">
                         Precios
+                    </TabsTrigger>
+                    <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
+                        Clientes
                     </TabsTrigger>
                     </TabsList>
                 </div>
@@ -730,21 +740,25 @@ function App() {
                     <TabsContent value="precios" className="mt-0 focus-visible:outline-none">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2">
-                                <PriceManagement 
-                                    transactions={transactions} 
-                                    prices={prices} 
-                                    onUpdatePrice={handleUpdatePrice} 
+                                <PriceManagement
+                                    transactions={transactions}
+                                    prices={prices}
+                                    onUpdatePrice={handleUpdatePrice}
                                     onDeleteProduct={handleDeleteProduct}
                                     onRenameProduct={handleRenameProduct}
                                 />
                             </div>
                             <div className="lg:col-span-1">
-                                <BoxOpeningModule 
+                                <BoxOpeningModule
                                     onAdd={handleAddTransaction}
                                     products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                                 />
                             </div>
                         </div>
+                    </TabsContent>
+
+                    <TabsContent value="clientes" className="mt-0 focus-visible:outline-none">
+                        <CustomerManagement userId={user?.id} />
                     </TabsContent>
                 </div>
                 </Tabs>

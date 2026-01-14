@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, DollarSign, Link2, FileText, Layers } from 'lucide-react';
+import { Plus, Tag, Hash, DollarSign, Link2, FileText, Layers, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -10,6 +10,8 @@ import { getUserProductsWithInventory } from '@/lib/productService';
 import { validateStock } from '@/lib/inventoryUtils';
 import { supabase } from '@/lib/supabase';
 import { createLoan } from '@/lib/loanService';
+import { getAllCustomers } from '@/lib/customerService';
+import { createAutomaticReminders } from '@/lib/reminderService';
 
 const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) => {
   console.log('[SalesModule] Renderizando con props:', { 
@@ -26,9 +28,12 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     tags: '',
     quantity: '',
     totalReceived: '',
-    campaignName: ''
+    campaignName: '',
+    saleType: 'organic', // 'organic', 'frequent_customer', 'referral'
+    customerId: ''
   });
   const [availableProducts, setAvailableProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
   
   console.log('[SalesModule] Estado inicial:', { formData, availableProducts: availableProducts.length });
 
@@ -45,7 +50,7 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
           return;
         }
         console.log('[SalesModule] Usuario obtenido:', user ? user.id : 'null');
-        
+
         if (user && isMounted) {
           console.log('[SalesModule] Cargando productos con inventario para userId:', user.id);
           const { data, error } = await getUserProductsWithInventory(user.id);
@@ -67,6 +72,38 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     loadProducts();
     return () => {
       console.log('[SalesModule] Cleanup useEffect');
+      isMounted = false;
+    };
+  }, []);
+
+  // Cargar clientes
+  useEffect(() => {
+    let isMounted = true;
+    const loadCustomers = async () => {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.error('[SalesModule] Error obteniendo usuario:', userError);
+          return;
+        }
+
+        if (user && isMounted) {
+          const { data, error } = await getAllCustomers(user.id);
+          if (error) {
+            console.error('[SalesModule] Error cargando clientes:', error);
+            return;
+          }
+          if (data && isMounted) {
+            setCustomers(data);
+            console.log('[SalesModule] Clientes cargados:', data.length);
+          }
+        }
+      } catch (error) {
+        console.error('[SalesModule] ERROR en loadCustomers:', error);
+      }
+    };
+    loadCustomers();
+    return () => {
       isMounted = false;
     };
   }, []);
@@ -99,11 +136,22 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
       return;
     }
 
+    // Validar que si el tipo es "Cliente Frecuente" debe seleccionar un cliente
+    if (formData.saleType === 'frequent_customer' && !formData.customerId) {
+      toast({
+        title: "Cliente Requerido",
+        description: "Debes seleccionar un cliente para ventas de Cliente Frecuente.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const tagsList = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
     let transactionsToAdd = [];
 
     try {
       let totalLoansCreated = 0;
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (tagsList.length > 0) {
         // Calcular distribución de cantidades
@@ -128,7 +176,9 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
               quantitySachets: 0,
               totalAmount: qty * revPerUnit,
               notes: `${formData.productName} ${formData.description}`.trim() + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
-              listPrice: prices[tag] || 0
+              listPrice: prices[tag] || 0,
+              customerId: formData.customerId || null,
+              saleType: formData.saleType
             });
 
             if (result.error) throw result.error;
@@ -171,7 +221,9 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
           quantitySachets: 0,
           totalAmount: totalMoney,
           notes: formData.description + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
-          listPrice: prices[formData.productName] || 0
+          listPrice: prices[formData.productName] || 0,
+          customerId: formData.customerId || null,
+          saleType: formData.saleType
         });
 
         if (result.error) throw result.error;
@@ -205,8 +257,39 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         });
       }
 
+      // Crear recordatorios automáticos si hay un cliente seleccionado
+      if (formData.customerId && transactionsToAdd.length > 0) {
+        const mainTransaction = transactionsToAdd[0];
+        const customer = customers.find(c => c.id === formData.customerId);
+
+        if (customer && mainTransaction && user) {
+          const reminderResult = await createAutomaticReminders(
+            user.id,
+            formData.customerId,
+            mainTransaction.id,
+            formData.productName,
+            customer.full_name
+          );
+
+          if (reminderResult.error) {
+            console.error('[SalesModule] Error creando recordatorios:', reminderResult.error);
+          } else {
+            console.log('[SalesModule] Recordatorios creados automáticamente');
+          }
+        }
+      }
+
       onAdd(transactionsToAdd);
-      setFormData({ productName: '', description: '', tags: '', quantity: '', totalReceived: '', campaignName: '' });
+      setFormData({
+        productName: '',
+        description: '',
+        tags: '',
+        quantity: '',
+        totalReceived: '',
+        campaignName: '',
+        saleType: 'organic',
+        customerId: ''
+      });
     } catch (error) {
       console.error('Error en handleSubmit:', error);
       toast({
@@ -318,6 +401,58 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         </div>
 
         <div className="space-y-2">
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Tipo de Venta *</label>
+          <div className="relative group">
+             <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
+             <select
+              value={formData.saleType}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  saleType: e.target.value,
+                  customerId: e.target.value === 'frequent_customer' ? formData.customerId : ''
+                });
+              }}
+              className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all appearance-none text-sm"
+            >
+              <option value="organic">Venta Orgánica</option>
+              <option value="frequent_customer">Cliente Frecuente</option>
+              <option value="referral">Referido</option>
+            </select>
+          </div>
+        </div>
+
+        {formData.saleType === 'frequent_customer' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="space-y-2"
+          >
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Seleccionar Cliente *</label>
+            <div className="relative group">
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-purple-400 transition-colors" />
+              <select
+                value={formData.customerId}
+                onChange={(e) => setFormData({...formData, customerId: e.target.value})}
+                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 outline-none transition-all appearance-none text-sm"
+              >
+                <option value="">-- Selecciona un cliente --</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.full_name} {customer.rut ? `(${customer.rut})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {customers.length === 0 && (
+              <p className="text-xs text-gray-500 pl-1">
+                No hay clientes registrados. Ve a "Gestión de Operaciones" → "Ficha de Cliente" para crear uno.
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        <div className="space-y-2">
           <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Campaña</label>
           <div className="relative group">
              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
@@ -326,7 +461,7 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
               onChange={(e) => setFormData({...formData, campaignName: e.target.value})}
               className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all appearance-none text-sm"
             >
-              <option value="">Venta Orgánica</option>
+              <option value="">Sin campaña</option>
               {campaigns.map((c, i) => (
                 <option key={i} value={c}>{c}</option>
               ))}
