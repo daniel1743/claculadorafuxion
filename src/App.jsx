@@ -597,10 +597,10 @@ function App() {
                 <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} products={products} loans={loans} />
             </section>
 
-            {/* 2.5. Points Card */}
-            <section>
+            {/* 2.5. Points Card - COMENTADO TEMPORALMENTE */}
+            {/* <section>
                 <PointsCard userId={user?.id} refreshTrigger={transactions.length} />
-            </section>
+            </section> */}
 
             {/* 3. Charts Section */}
             <section>
