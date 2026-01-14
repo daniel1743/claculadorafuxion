@@ -23,18 +23,30 @@ const PointsCard = ({ userId, refreshTrigger = 0 }) => {
     try {
       const { data, error } = await getUserTotalPoints(userId);
 
-      if (error) throw error;
+      if (error) {
+        // Si la tabla no existe, simplemente usa valores por defecto sin mostrar error
+        if (error.message?.includes('user_points')) {
+          console.warn('[PointsCard] Tabla user_points no existe. Sistema de puntos desactivado.');
+          setPointsData({ base_points: 0, purchase_points: 0, total_points: 0 });
+          setLoading(false);
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         setPointsData(data);
       }
     } catch (error) {
       console.error('[PointsCard] Error loading points:', error);
-      toast({
-        title: "Error al cargar puntos",
-        description: "No se pudieron cargar tus puntos. Intenta recargar la página.",
-        variant: "destructive"
-      });
+      // No mostrar toast si es solo la tabla faltante
+      if (!error.message?.includes('user_points')) {
+        toast({
+          title: "Error al cargar puntos",
+          description: "No se pudieron cargar tus puntos. Intenta recargar la página.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }
