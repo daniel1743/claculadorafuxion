@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
 import AdModule from '@/components/AdModule';
@@ -51,6 +52,42 @@ function App() {
 
   // Verificar si el usuario es admin (RE-ACTIVADO después de optimizar RLS)
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(user);
+
+  // DEBUG: Presiona F12 para ver info completa de admin
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === 'F12') {
+        e.preventDefault();
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔍 DEBUG ADMIN - Presionaste F12');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('👤 Usuario actual:', user);
+        console.log('📧 Email:', user?.email);
+        console.log('🆔 User ID:', user?.id);
+        console.log('🛡️ isAdmin:', isAdmin);
+        console.log('⏳ isLoadingAdmin:', isLoadingAdmin);
+        console.log('❓ ¿Debe mostrarse botón Admin?', isAdmin === true);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        alert(`
+🔍 DEBUG ADMIN
+━━━━━━━━━━━━━━━━━
+Usuario: ${user?.email || 'NO LOGIN'}
+User ID: ${user?.id || 'N/A'}
+Es Admin: ${isAdmin ? '✅ SÍ' : '❌ NO'}
+Loading: ${isLoadingAdmin ? '⏳ Cargando...' : '✅ Listo'}
+
+¿Debe mostrarse botón?
+${isAdmin ? '✅ SÍ - Debe estar visible' : '❌ NO - Usuario normal'}
+
+Ver consola para más detalles (F12)
+        `);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [user, isAdmin, isLoadingAdmin]);
 
   const totalInventory = Object.values(inventoryMap).reduce((sum, qty) => sum + qty, 0);
 
@@ -140,133 +177,18 @@ function App() {
     }
   };
 
-  // Verificar sesión al cargar - CON TIMEOUT DE SEGURIDAD
+  // SIMPLIFICADO: SIEMPRE mostrar login (sin usar getSession al inicio)
   useEffect(() => {
-    let isMounted = true;
-    let timeoutId;
+    console.log('[App] 🚀 Iniciando app - Mostrando login directo');
+    setAuthModalOpen(true);
+    setLoading(false);
 
-    const checkSession = async () => {
-      console.log('[App] 🔍 Iniciando checkSession...');
-
-      try {
-        // Timeout de seguridad: si tarda más de 10s, mostrar login
-        timeoutId = setTimeout(() => {
-          console.error('[App] ⏱️ TIMEOUT: checkSession tardó más de 10s');
-          if (isMounted) {
-            setAuthModalOpen(true);
-            setLoading(false);
-          }
-        }, 10000);
-
-        console.log('[App] 📦 Importando Supabase...');
-        const { supabase } = await import('@/lib/supabase');
-
-        if (!supabase) {
-          console.error('[App] ❌ Supabase no disponible');
-          clearTimeout(timeoutId);
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        console.log('[App] 🔑 Obteniendo sesión...');
-
-        // Timeout específico para getSession (3 segundos máximo)
-        const getSessionPromise = supabase.auth.getSession();
-        const sessionTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('getSession timeout')), 3000)
-        );
-
-        let sessionResult;
-        try {
-          sessionResult = await Promise.race([getSessionPromise, sessionTimeout]);
-        } catch (timeoutError) {
-          console.error('[App] ❌ TIMEOUT en getSession (>3s)');
-          console.log('[App] 🧹 Limpiando localStorage...');
-
-          // Limpiar localStorage corrupto
-          Object.keys(localStorage).forEach(key => {
-            if (key.includes('supabase')) {
-              localStorage.removeItem(key);
-            }
-          });
-
-          clearTimeout(timeoutId);
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        const { data: { session } } = sessionResult;
-        console.log('[App] 📊 Sesión obtenida:', !!session);
-
-        if (!isMounted) {
-          console.log('[App] ⚠️ Componente desmontado');
-          clearTimeout(timeoutId);
-          return;
-        }
-
-        // Si no hay sesión, mostrar login
-        if (!session) {
-          console.log('[App] 🔓 Sin sesión, mostrando login');
-          clearTimeout(timeoutId);
-          setAuthModalOpen(true);
-          setLoading(false);
-          return;
-        }
-
-        // Hay sesión válida, cargar usuario
-        const currentUser = session.user;
-        console.log('[App] 👤 Usuario en sesión:', currentUser.email);
-
-        // Obtener perfil con timeout
-        console.log('[App] 📝 Obteniendo perfil...');
-        const profilePromise = getUserProfile(currentUser.id);
-        const profileTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout perfil')), 5000)
-        );
-
-        let profileData = null;
-        try {
-          const result = await Promise.race([profilePromise, profileTimeout]);
-          profileData = result.data;
-          console.log('[App] ✅ Perfil obtenido:', profileData?.name);
-        } catch (err) {
-          console.warn('[App] ⚠️ Timeout en perfil, continuando sin él');
-        }
-
-        const userData = {
-          id: currentUser.id,
-          email: currentUser.email,
-          name: profileData?.name || currentUser.email?.split('@')[0] || 'Usuario',
-          avatar: profileData?.avatar_url || null
-        };
-
-        if (isMounted) {
-          console.log('[App] 💾 Estableciendo usuario...');
-          setUser(userData);
-
-          console.log('[App] 📦 Cargando datos...');
-          await loadUserData(currentUser.id);
-
-          console.log('[App] ✅ CheckSession completado');
-          clearTimeout(timeoutId);
-        }
-      } catch (error) {
-        console.error('[App] ❌ Error en checkSession:', error);
-        clearTimeout(timeoutId);
-        if (isMounted) {
-          setAuthModalOpen(true);
-          setLoading(false);
-        }
-      }
-    };
-
-    checkSession();
-
-    // Escuchar cambios en la autenticación (ANTES del return)
+    // Escuchar cambios en la autenticación (solo SIGNED_OUT)
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+      console.log('[App] 🔔 Auth event:', event);
+
       if (event === 'SIGNED_OUT' || !session) {
+        console.log('[App] 🚪 Cerrando sesión...');
         setUser(null);
         setTransactions([]);
         setPrices({});
@@ -274,34 +196,12 @@ function App() {
         setCampaigns([]);
         setLoans([]);
         setAuthModalOpen(true);
-      } else if (event === 'SIGNED_IN' && session.user) {
-        let { data: profileData } = await getUserProfile(session.user.id);
-
-        // Si no existe el perfil, crearlo
-        if (!profileData) {
-          const { data: newProfile } = await createUserProfile(
-            session.user.id,
-            session.user.email?.split('@')[0] || 'Usuario',
-            session.user.email
-          );
-          profileData = newProfile;
-        }
-
-        const userData = {
-          id: session.user.id,
-          email: session.user.email,
-          name: profileData?.name || session.user.email?.split('@')[0] || 'Usuario',
-          avatar: profileData?.avatar_url || null
-        };
-
-        setUser(userData);
-        await loadUserData(session.user.id);
       }
+      // NO manejar SIGNED_IN aquí - lo maneja handleLogin directamente
     });
 
     return () => {
       console.log('[App] Cleanup useEffect - desmontando');
-      isMounted = false;
       subscription.unsubscribe();
     };
   }, []); // Dependencias vacías para que solo se ejecute una vez
@@ -576,9 +476,20 @@ function App() {
   };
 
   const handleLogin = async (userData) => {
+    console.log('[App] 🎉 handleLogin llamado');
+    console.log('[App] 👤 userData:', userData);
+
+    // IMPORTANTE: Establecer usuario Y cerrar modal PRIMERO (síncronamente)
     setUser(userData);
     setAuthModalOpen(false);
-    await loadUserData(userData.id);
+    console.log('[App] ✅ Usuario establecido y modal cerrado');
+
+    // Cargar datos DESPUÉS (asíncronamente, sin bloquear el cierre del modal)
+    setTimeout(async () => {
+      console.log('[App] 📦 Cargando datos en background...');
+      await loadUserData(userData.id);
+      console.log('[App] ✅ Datos cargados');
+    }, 100);
   };
 
   const handleLogout = async () => {
@@ -628,7 +539,7 @@ function App() {
             <Toaster />
             <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
 
-        {console.log('[App] Render - authModalOpen:', authModalOpen, 'user:', user, 'loading:', loading)}
+        {console.log('[App] 🎨 RENDER - authModalOpen:', authModalOpen, 'user:', !!user, 'loading:', loading, 'MODAL DEBE MOSTRARSE:', authModalOpen && !user)}
 
         {loading && !user && (
           <div className="flex items-center justify-center min-h-screen">
@@ -879,6 +790,45 @@ function App() {
             currentUser={user}
             onClose={() => setShowAdminPanel(false)}
           />
+        )}
+
+        {/* DEBUG: Botón flotante visible que muestra estado de admin */}
+        {user && (
+          <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+            {/* Indicador de estado */}
+            <div className="bg-gray-900/95 border-2 border-purple-500 rounded-lg p-3 shadow-2xl text-xs">
+              <div className="text-purple-400 font-bold mb-1">🔍 DEBUG ADMIN</div>
+              <div className="text-gray-300">User: {user.email}</div>
+              <div className="text-gray-300">ID: {user.id?.slice(0, 8)}...</div>
+              <div className={`font-bold ${isAdmin ? 'text-green-400' : 'text-red-400'}`}>
+                isAdmin: {isAdmin ? '✅ TRUE' : '❌ FALSE'}
+              </div>
+              <div className="text-gray-400">Loading: {isLoadingAdmin ? '⏳' : '✅'}</div>
+            </div>
+
+            {/* Botón para abrir panel (siempre visible si es admin) */}
+            {isAdmin && (
+              <Button
+                onClick={() => setShowAdminPanel(true)}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold shadow-2xl"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                ABRIR PANEL ADMIN
+              </Button>
+            )}
+
+            {/* Botón para presionar F12 */}
+            <Button
+              onClick={() => {
+                const event = new KeyboardEvent('keydown', { key: 'F12' });
+                window.dispatchEvent(event);
+              }}
+              variant="outline"
+              className="bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              Ver Info Completa
+            </Button>
+          </div>
         )}
           </div>
         </>
