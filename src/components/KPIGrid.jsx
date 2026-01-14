@@ -193,14 +193,10 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }))
         .slice(0, 3);
 
-    const productList = (Array.isArray(products) ? products : [])
-        .filter(p => p.currentStockBoxes > 0) // Solo productos con stock
-        .sort((a,b) => b.currentStockBoxes - a.currentStockBoxes)
+    const productList = Object.values(products)
+        .sort((a,b) => b.stock - a.stock)
         .slice(0, 3)
-        .map(p => ({
-          label: p.name,
-          value: `${p.currentStockBoxes} cajas${p.currentMarketingStock > 0 ? ` + ${p.currentMarketingStock} sobres` : ''}`
-        }));
+        .map(p => ({ label: p.name, value: p.stock + ' un.' }));
 
     const profitPreview = [
         { label: 'Ingresos', value: formatCLP(totalSales) },
@@ -392,15 +388,13 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         />
       </div>
 
-      <KPIModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        type={selectedKPI.type}
+      <KPIModal 
+        isOpen={modalOpen} 
+        onClose={() => setModalOpen(false)} 
+        type={selectedKPI.type} 
         title={selectedKPI.title}
         color={selectedKPI.color}
         transactions={transactions}
-        products={products}
-        inventoryMap={inventoryMap}
       />
     </>
   );

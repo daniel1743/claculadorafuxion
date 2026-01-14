@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, DollarSign, Link2, FileText, Layers, Users } from 'lucide-react';
+import { Plus, Tag, Hash, DollarSign, Link2, FileText, Layers, Users, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -14,13 +14,6 @@ import { getAllCustomers } from '@/lib/customerService';
 import { createAutomaticReminders } from '@/lib/reminderService';
 
 const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) => {
-  console.log('[SalesModule] Renderizando con props:', { 
-    inventoryMapKeys: Object.keys(inventoryMap).length, 
-    campaigns: campaigns.length, 
-    pricesKeys: Object.keys(prices).length, 
-    products: products.length 
-  });
-  
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     productName: '',
@@ -28,52 +21,33 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     tags: '',
     quantity: '',
     totalReceived: '',
-    campaignName: '',
-    saleType: 'organic', // 'organic', 'frequent_customer', 'referral'
-    customerId: ''
+    campaignName: '', // Puede ser: '', 'Venta Recurrente', 'Venta por Referencia', o campaña personalizada
+    customerId: '', // Para Venta Recurrente
+    referredBy: '' // Para Venta por Referencia (nombre del referente)
   });
   const [availableProducts, setAvailableProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
-  
-  console.log('[SalesModule] Estado inicial:', { formData, availableProducts: availableProducts.length });
 
   // Cargar productos con inventario
   useEffect(() => {
-    console.log('[SalesModule] useEffect - cargando productos...');
     let isMounted = true;
     const loadProducts = async () => {
       try {
-        console.log('[SalesModule] Obteniendo usuario de supabase...');
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          console.error('[SalesModule] Error obteniendo usuario:', userError);
-          return;
-        }
-        console.log('[SalesModule] Usuario obtenido:', user ? user.id : 'null');
+        if (userError || !user) return;
 
-        if (user && isMounted) {
-          console.log('[SalesModule] Cargando productos con inventario para userId:', user.id);
+        if (isMounted) {
           const { data, error } = await getUserProductsWithInventory(user.id);
-          if (error) {
-            console.error('[SalesModule] Error cargando productos:', error);
-            return;
-          }
-          console.log('[SalesModule] Productos cargados:', data ? data.length : 0, data);
-          if (data && isMounted) {
+          if (!error && data && isMounted) {
             setAvailableProducts(data);
-            console.log('[SalesModule] availableProducts actualizado');
           }
         }
       } catch (error) {
-        console.error('[SalesModule] ERROR en loadProducts:', error);
-        console.error('[SalesModule] Stack trace:', error.stack);
+        console.error('[SalesModule] Error:', error);
       }
     };
     loadProducts();
-    return () => {
-      console.log('[SalesModule] Cleanup useEffect');
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   // Cargar clientes
@@ -82,30 +56,20 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     const loadCustomers = async () => {
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          console.error('[SalesModule] Error obteniendo usuario:', userError);
-          return;
-        }
+        if (userError || !user) return;
 
-        if (user && isMounted) {
+        if (isMounted) {
           const { data, error } = await getAllCustomers(user.id);
-          if (error) {
-            console.error('[SalesModule] Error cargando clientes:', error);
-            return;
-          }
-          if (data && isMounted) {
+          if (!error && data && isMounted) {
             setCustomers(data);
-            console.log('[SalesModule] Clientes cargados:', data.length);
           }
         }
       } catch (error) {
-        console.error('[SalesModule] ERROR en loadCustomers:', error);
+        console.error('[SalesModule] Error clientes:', error);
       }
     };
     loadCustomers();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   // Auto-calculate total received based on stored price when product or quantity changes
@@ -136,11 +100,21 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
       return;
     }
 
-    // Validar que si el tipo es "Cliente Frecuente" debe seleccionar un cliente
-    if (formData.saleType === 'frequent_customer' && !formData.customerId) {
+    // Validar que si es "Venta Recurrente" debe seleccionar un cliente
+    if (formData.campaignName === 'Venta Recurrente' && !formData.customerId) {
       toast({
         title: "Cliente Requerido",
-        description: "Debes seleccionar un cliente para ventas de Cliente Frecuente.",
+        description: "Debes seleccionar un cliente para Venta Recurrente.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar que si es "Venta por Referencia" debe ingresar el nombre del referente
+    if (formData.campaignName === 'Venta por Referencia' && !formData.referredBy.trim()) {
+      toast({
+        title: "Referente Requerido",
+        description: "Debes ingresar el nombre de quien refiere para Venta por Referencia.",
         variant: "destructive"
       });
       return;
@@ -152,6 +126,25 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
     try {
       let totalLoansCreated = 0;
       const { data: { user } } = await supabase.auth.getUser();
+
+      // Determinar sale_type basado en campaignName
+      let saleType = 'organic';
+      if (formData.campaignName === 'Venta Recurrente') {
+        saleType = 'recurring';
+      } else if (formData.campaignName === 'Venta por Referencia') {
+        saleType = 'referral';
+      }
+
+      // Buscar si el referente existe en la base de datos (para Venta por Referencia)
+      let referrerId = null;
+      if (formData.campaignName === 'Venta por Referencia' && formData.referredBy.trim()) {
+        const referrer = customers.find(c =>
+          c.full_name.toLowerCase() === formData.referredBy.trim().toLowerCase()
+        );
+        if (referrer) {
+          referrerId = referrer.id;
+        }
+      }
 
       if (tagsList.length > 0) {
         // Calcular distribución de cantidades
@@ -175,10 +168,17 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
               quantityBoxes: qty,
               quantitySachets: 0,
               totalAmount: qty * revPerUnit,
-              notes: `${formData.productName} ${formData.description}`.trim() + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
+              notes: `${formData.productName} ${formData.description}`.trim() +
+                     (formData.campaignName && !['Venta Recurrente', 'Venta por Referencia'].includes(formData.campaignName)
+                       ? ` - Campaña: ${formData.campaignName}`
+                       : '') +
+                     (formData.campaignName === 'Venta por Referencia'
+                       ? ` - Referido por: ${formData.referredBy}`
+                       : ''),
               listPrice: prices[tag] || 0,
               customerId: formData.customerId || null,
-              saleType: formData.saleType
+              saleType: saleType,
+              referrerId: referrerId
             });
 
             if (result.error) throw result.error;
@@ -220,10 +220,17 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
           quantityBoxes: totalQty,
           quantitySachets: 0,
           totalAmount: totalMoney,
-          notes: formData.description + (formData.campaignName ? ` - Campaña: ${formData.campaignName}` : ''),
+          notes: formData.description +
+                 (formData.campaignName && !['Venta Recurrente', 'Venta por Referencia'].includes(formData.campaignName)
+                   ? ` - Campaña: ${formData.campaignName}`
+                   : '') +
+                 (formData.campaignName === 'Venta por Referencia'
+                   ? ` - Referido por: ${formData.referredBy}`
+                   : ''),
           listPrice: prices[formData.productName] || 0,
           customerId: formData.customerId || null,
-          saleType: formData.saleType
+          saleType: saleType,
+          referrerId: referrerId
         });
 
         if (result.error) throw result.error;
@@ -257,8 +264,8 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         });
       }
 
-      // Crear recordatorios automáticos si hay un cliente seleccionado
-      if (formData.customerId && transactionsToAdd.length > 0) {
+      // Crear recordatorios automáticos si es Venta Recurrente
+      if (formData.campaignName === 'Venta Recurrente' && formData.customerId && transactionsToAdd.length > 0) {
         const mainTransaction = transactionsToAdd[0];
         const customer = customers.find(c => c.id === formData.customerId);
 
@@ -272,11 +279,19 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
           );
 
           if (reminderResult.error) {
-            console.error('[SalesModule] Error creando recordatorios:', reminderResult.error);
-          } else {
-            console.log('[SalesModule] Recordatorios creados automáticamente');
+            console.error('[SalesModule] Error recordatorios:', reminderResult.error);
           }
         }
+      }
+
+      // Mensaje de éxito personalizado
+      if (formData.campaignName === 'Venta por Referencia' && referrerId) {
+        const referrer = customers.find(c => c.id === referrerId);
+        toast({
+          title: "Venta por Referencia Registrada",
+          description: `Venta registrada. ${referrer?.full_name || formData.referredBy} sumó una referencia a su historial.`,
+          className: "bg-green-900 border-green-600 text-white"
+        });
       }
 
       onAdd(transactionsToAdd);
@@ -287,8 +302,8 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         quantity: '',
         totalReceived: '',
         campaignName: '',
-        saleType: 'organic',
-        customerId: ''
+        customerId: '',
+        referredBy: ''
       });
     } catch (error) {
       console.error('Error en handleSubmit:', error);
@@ -401,34 +416,40 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Tipo de Venta *</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Campaña / Tipo de Venta *</label>
           <div className="relative group">
-             <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
+             <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
              <select
-              value={formData.saleType}
+              value={formData.campaignName}
               onChange={(e) => {
                 setFormData({
                   ...formData,
-                  saleType: e.target.value,
-                  customerId: e.target.value === 'frequent_customer' ? formData.customerId : ''
+                  campaignName: e.target.value,
+                  customerId: e.target.value === 'Venta Recurrente' ? formData.customerId : '',
+                  referredBy: e.target.value === 'Venta por Referencia' ? formData.referredBy : ''
                 });
               }}
               className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all appearance-none text-sm"
             >
-              <option value="organic">Venta Orgánica</option>
-              <option value="frequent_customer">Cliente Frecuente</option>
-              <option value="referral">Referido</option>
+              <option value="">Venta Orgánica</option>
+              <option value="Venta Recurrente">Venta Recurrente</option>
+              <option value="Venta por Referencia">Venta por Referencia</option>
+              {campaigns.length > 0 && <option disabled>────────────</option>}
+              {campaigns.map((c, i) => (
+                <option key={i} value={c}>{c}</option>
+              ))}
             </select>
           </div>
         </div>
 
-        {formData.saleType === 'frequent_customer' && (
+        {/* Campo Cliente Recurrente - aparece cuando se selecciona "Venta Recurrente" */}
+        {formData.campaignName === 'Venta Recurrente' && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             className="space-y-2"
           >
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Seleccionar Cliente *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Cliente Recurrente *</label>
             <div className="relative group">
               <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-purple-400 transition-colors" />
               <select
@@ -446,28 +467,35 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
             </div>
             {customers.length === 0 && (
               <p className="text-xs text-gray-500 pl-1">
-                No hay clientes registrados. Ve a "Gestión de Operaciones" → "Ficha de Cliente" para crear uno.
+                No hay clientes registrados. Ve a "Gestión de Operaciones" → "Clientes" para crear uno.
               </p>
             )}
           </motion.div>
         )}
 
-        <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Campaña</label>
-          <div className="relative group">
-             <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
-             <select
-              value={formData.campaignName}
-              onChange={(e) => setFormData({...formData, campaignName: e.target.value})}
-              className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all appearance-none text-sm"
-            >
-              <option value="">Sin campaña</option>
-              {campaigns.map((c, i) => (
-                <option key={i} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        {/* Campo Referente - aparece cuando se selecciona "Venta por Referencia" */}
+        {formData.campaignName === 'Venta por Referencia' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="space-y-2"
+          >
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Nombre del Referente *</label>
+            <div className="relative group">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+              <input
+                type="text"
+                value={formData.referredBy}
+                onChange={(e) => setFormData({...formData, referredBy: e.target.value})}
+                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all placeholder-gray-700"
+                placeholder="Nombre de quien recomienda"
+              />
+            </div>
+            <p className="text-xs text-gray-400 pl-1">
+              Si el referente está en tu base de datos, se sumará automáticamente a su historial de referencias.
+            </p>
+          </motion.div>
+        )}
 
         <div className="bg-green-500/5 rounded-xl p-4 border border-green-500/10 flex justify-between items-center">
            <span className="text-xs text-gray-400">Stock Disponible (Item Principal)</span>

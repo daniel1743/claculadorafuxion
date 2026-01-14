@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Users } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins } from 'lucide-react';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
 import AdModule from '@/components/AdModule';
@@ -13,22 +13,25 @@ import LoanModule from '@/components/LoanModule';
 import LoanRepaymentModule from '@/components/LoanRepaymentModule';
 import PriceManagement from '@/components/PriceManagement';
 import KPIGrid from '@/components/KPIGrid';
-import PointsCard from '@/components/PointsCard';
 import ChartsSection from '@/components/ChartsSection';
 import DataTable from '@/components/DataTable';
-import CustomerManagement from '@/components/CustomerManagement';
-import RemindersCard from '@/components/RemindersCard';
 import { Toaster } from '@/components/ui/toaster';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AuthModal from '@/components/AuthModal';
 import UserProfile from '@/components/UserProfile';
-import { signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice } from '@/lib/supabaseService';
+import AdminPanel from '@/components/AdminPanel';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
 import { getTransactionsV2 } from '@/lib/transactionServiceV2';
 import { getUserProductsWithInventory } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
 import { useToast } from '@/components/ui/use-toast';
 import ErrorDebugger from '@/components/ErrorDebugger';
-import { TooltipProvider } from '@/contexts/TooltipContext';
+import HistoryCard from '@/components/HistoryCard';
+import CyclesHistoryView from '@/components/CyclesHistoryView';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import { TooltipProvider as TooltipContextProvider } from '@/contexts/TooltipContext';
+import { TooltipProvider as RadixTooltipProvider } from '@/components/ui/tooltip';
 
 function App() {
   const { toast } = useToast();
@@ -41,184 +44,267 @@ function App() {
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showCyclesHistory, setShowCyclesHistory] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  // INVENTARIO TOTAL: Calcular desde productos V2 (fuente de verdad)
-  const totalInventory = (Array.isArray(products) ? products : []).reduce((sum, product) => {
-    return sum + (product.currentStockBoxes || 0);
-  }, 0);
+  // Verificar si el usuario es admin (RE-ACTIVADO después de optimizar RLS)
+  const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(user);
 
-  // Cargar datos del usuario autenticado
+  const totalInventory = Object.values(inventoryMap).reduce((sum, qty) => sum + qty, 0);
+
+  // Cargar datos del usuario autenticado - SIMPLIFICADO
   const loadUserData = async (userId) => {
-    // Timeout de seguridad para toda la función - AUMENTADO a 30 segundos
-    const timeoutId = setTimeout(() => {
-      console.error('[App] ⏱️ TIMEOUT GLOBAL: loadUserData tardó más de 30 segundos');
-      console.error('[App] Forzando carga para evitar pantalla negra infinita');
-      console.error('[App] PROBABLE CAUSA: Políticas RLS no configuradas en Supabase');
-      setLoading(false);
-      toast({
-        title: "⚠️ Timeout de Carga",
-        description: "La carga tardó demasiado. Verifica la consola del navegador y las políticas RLS de Supabase.",
-        variant: "destructive",
-        duration: 10000
-      });
-    }, 30000);
-
     try {
-      console.log('[App] loadUserData iniciado para userId:', userId);
       setLoading(true);
 
-      // Cargar transacciones V2 (con productos) con timeout AUMENTADO
-      console.log('[App] Cargando transacciones V2...');
-      const transactionsPromise = getTransactionsV2(userId);
-      const transactionsTimeout = new Promise((_, reject) =>
-        setTimeout(() => {
-          console.warn('[App] ⏱️ Timeout alcanzado en transacciones (15s)');
-          console.warn('[App] Esto sugiere que las políticas RLS no están configuradas correctamente');
-          reject(new Error('Timeout transacciones'));
-        }, 15000)
-      );
+      // Cargar en PARALELO sin timeouts complicados
+      const [transactionsResult, productsResult, pricesResult, loansResult] = await Promise.allSettled([
+        getTransactionsV2(userId),
+        getUserProductsWithInventory(userId),
+        getPrices(userId),
+        getUserLoans(userId)
+      ]);
 
-      let transactionsDataV2, transactionsErrorV2;
-      try {
-        const result = await Promise.race([transactionsPromise, transactionsTimeout]);
-        console.log('[App] ✅ Transacciones V2 respondieron:', result);
-        transactionsDataV2 = result.data;
-        transactionsErrorV2 = result.error;
-      } catch (timeoutError) {
-        console.warn('[App] ⚠️ Timeout/Error en transacciones V2, continuando sin ellas:', timeoutError.message);
-        transactionsErrorV2 = timeoutError;
-        transactionsDataV2 = [];
-      }
-      console.log('[App] Transacciones V2:', { data: transactionsDataV2, error: transactionsErrorV2 });
-      
-      if (transactionsErrorV2) {
-        console.warn('[App] Error en V2, usando fallback antiguo:', transactionsErrorV2);
-        // Fallback a método antiguo si V2 falla
-        const { data: transactionsData, error: transactionsError } = await getTransactions(userId);
-        if (transactionsError) throw transactionsError;
-        if (transactionsData) {
-          console.log('[App] Transacciones antiguas cargadas:', transactionsData.length);
-          setTransactions(transactionsData);
-          recalculateInventory(transactionsData);
-          extractCampaigns(transactionsData);
-        }
+      // Procesar transacciones
+      if (transactionsResult.status === 'fulfilled' && transactionsResult.value?.data) {
+        console.log('[App] Transacciones cargadas:', transactionsResult.value.data.length);
+        setTransactions(transactionsResult.value.data);
+        recalculateInventory(transactionsResult.value.data);
+        extractCampaigns(transactionsResult.value.data);
       } else {
-        if (transactionsDataV2) {
-          console.log('[App] Transacciones V2 cargadas:', transactionsDataV2.length);
-          setTransactions(transactionsDataV2);
-          recalculateInventory(transactionsDataV2);
-          extractCampaigns(transactionsDataV2);
-        } else {
-          console.log('[App] No hay transacciones V2');
-        }
+        console.warn('[App] No se cargaron transacciones');
+        setTransactions([]);
       }
 
-      // Cargar productos V2 (con PPP e inventario)
-      console.log('[App] Cargando productos V2...');
-      const { data: productsData, error: productsError } = await getUserProductsWithInventory(userId);
-      console.log('[App] Productos V2:', { data: productsData, error: productsError });
-      
-      if (!productsError && productsData) {
-        console.log('[App] Productos V2 cargados:', productsData.length);
-        setProducts(productsData);
+      // Procesar productos
+      if (productsResult.status === 'fulfilled' && productsResult.value?.data) {
+        console.log('[App] Productos cargados:', productsResult.value.data.length);
+        setProducts(productsResult.value.data);
+
         // Actualizar precios desde productos
         const pricesFromProducts = {};
-        productsData.forEach(p => {
+        productsResult.value.data.forEach(p => {
           if (p.listPrice > 0) {
             pricesFromProducts[p.name] = p.listPrice;
           }
         });
-        console.log('[App] Precios desde productos:', pricesFromProducts);
         setPrices(prev => ({ ...prev, ...pricesFromProducts }));
       } else {
-        console.warn('[App] Error o sin productos:', productsError);
+        console.warn('[App] No se cargaron productos');
+        setProducts([]);
       }
 
-      // Cargar precios (compatibilidad con sistema antiguo)
-      console.log('[App] Cargando precios antiguos...');
-      const { data: pricesData, error: pricesError } = await getPrices(userId);
-      console.log('[App] Precios antiguos:', { data: pricesData, error: pricesError });
-
-      if (!pricesError && pricesData) {
-        console.log('[App] Precios antiguos cargados:', Object.keys(pricesData).length);
-        setPrices(prev => ({ ...prev, ...pricesData }));
+      // Procesar precios
+      if (pricesResult.status === 'fulfilled' && pricesResult.value?.data) {
+        console.log('[App] Precios cargados:', Object.keys(pricesResult.value.data).length);
+        setPrices(prev => ({ ...prev, ...pricesResult.value.data }));
       }
 
-      // Cargar préstamos
-      console.log('[App] Cargando préstamos...');
-      const { data: loansData, error: loansError } = await getUserLoans(userId);
-      console.log('[App] Préstamos:', { data: loansData, error: loansError });
-
-      if (!loansError && loansData) {
-        console.log('[App] Préstamos cargados:', loansData.length);
-        setLoans(loansData);
+      // Procesar préstamos
+      if (loansResult.status === 'fulfilled' && loansResult.value?.data) {
+        console.log('[App] Préstamos cargados:', loansResult.value.data.length);
+        setLoans(loansResult.value.data);
+      } else {
+        console.warn('[App] No se cargaron préstamos');
+        setLoans([]);
       }
 
-      console.log('[App] loadUserData completado exitosamente');
+      console.log('[App] ✅ loadUserData completado exitosamente');
     } catch (error) {
-      console.error('[App] ERROR en loadUserData:', error);
+      console.error('[App] ❌ ERROR en loadUserData:', error);
       console.error('[App] Stack trace:', error.stack);
-      toast({
-        title: "Error al cargar datos",
-        description: "No se pudieron cargar tus datos. Por favor, recarga la página.",
-        variant: "destructive"
-      });
+
+      // Si es timeout global, mostrar datos parciales en lugar de error total
+      if (error.message?.includes('Timeout global')) {
+        console.warn('[App] ⚠️ Timeout global alcanzado, mostrando datos parciales');
+        toast({
+          title: "⚠️ Carga lenta",
+          description: "Algunos datos tardaron en cargar. La app funciona con datos parciales.",
+          className: "bg-yellow-900 border-yellow-600 text-white"
+        });
+      } else {
+        toast({
+          title: "Error al cargar datos",
+          description: error.message || "No se pudieron cargar tus datos completamente.",
+          variant: "destructive"
+        });
+      }
+
+      // IMPORTANTE: Continuar con datos vacíos en lugar de quedarse colgado
+      console.log('[App] 🔄 Continuando con datos vacíos/parciales');
     } finally {
-      clearTimeout(timeoutId); // Limpiar timeout de seguridad
-      console.log('[App] loadUserData finalizado, setLoading(false)');
+      console.log('[App] 🏁 loadUserData finalizado, setLoading(false)');
       setLoading(false);
     }
   };
 
-  // Verificar sesión al cargar - SIMPLIFICADO
+  // Verificar sesión al cargar - CON TIMEOUT DE SEGURIDAD
   useEffect(() => {
-    console.log('[App] 🚀 Iniciando app...');
+    let isMounted = true;
+    let timeoutId;
 
-    const init = async () => {
+    const checkSession = async () => {
+      console.log('[App] 🔍 Iniciando checkSession...');
+
       try {
+        // Timeout de seguridad: si tarda más de 10s, mostrar login
+        timeoutId = setTimeout(() => {
+          console.error('[App] ⏱️ TIMEOUT: checkSession tardó más de 10s');
+          if (isMounted) {
+            setAuthModalOpen(true);
+            setLoading(false);
+          }
+        }, 10000);
+
+        console.log('[App] 📦 Importando Supabase...');
         const { supabase } = await import('@/lib/supabase');
 
-        // Intentar obtener sesión actual
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!session) {
-          console.log('[App] Sin sesión - mostrando login');
+        if (!supabase) {
+          console.error('[App] ❌ Supabase no disponible');
+          clearTimeout(timeoutId);
           setAuthModalOpen(true);
           setLoading(false);
           return;
         }
 
-        // Sesión válida - preparar usuario
-        console.log('[App] ✅ Sesión encontrada:', session.user.email);
+        console.log('[App] 🔑 Obteniendo sesión...');
+
+        // Timeout específico para getSession (3 segundos máximo)
+        const getSessionPromise = supabase.auth.getSession();
+        const sessionTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getSession timeout')), 3000)
+        );
+
+        let sessionResult;
+        try {
+          sessionResult = await Promise.race([getSessionPromise, sessionTimeout]);
+        } catch (timeoutError) {
+          console.error('[App] ❌ TIMEOUT en getSession (>3s)');
+          console.log('[App] 🧹 Limpiando localStorage...');
+
+          // Limpiar localStorage corrupto
+          Object.keys(localStorage).forEach(key => {
+            if (key.includes('supabase')) {
+              localStorage.removeItem(key);
+            }
+          });
+
+          clearTimeout(timeoutId);
+          setAuthModalOpen(true);
+          setLoading(false);
+          return;
+        }
+
+        const { data: { session } } = sessionResult;
+        console.log('[App] 📊 Sesión obtenida:', !!session);
+
+        if (!isMounted) {
+          console.log('[App] ⚠️ Componente desmontado');
+          clearTimeout(timeoutId);
+          return;
+        }
+
+        // Si no hay sesión, mostrar login
+        if (!session) {
+          console.log('[App] 🔓 Sin sesión, mostrando login');
+          clearTimeout(timeoutId);
+          setAuthModalOpen(true);
+          setLoading(false);
+          return;
+        }
+
+        // Hay sesión válida, cargar usuario
+        const currentUser = session.user;
+        console.log('[App] 👤 Usuario en sesión:', currentUser.email);
+
+        // Obtener perfil con timeout
+        console.log('[App] 📝 Obteniendo perfil...');
+        const profilePromise = getUserProfile(currentUser.id);
+        const profileTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout perfil')), 5000)
+        );
+
+        let profileData = null;
+        try {
+          const result = await Promise.race([profilePromise, profileTimeout]);
+          profileData = result.data;
+          console.log('[App] ✅ Perfil obtenido:', profileData?.name);
+        } catch (err) {
+          console.warn('[App] ⚠️ Timeout en perfil, continuando sin él');
+        }
+
+        const userData = {
+          id: currentUser.id,
+          email: currentUser.email,
+          name: profileData?.name || currentUser.email?.split('@')[0] || 'Usuario',
+          avatar: profileData?.avatar_url || null
+        };
+
+        if (isMounted) {
+          console.log('[App] 💾 Estableciendo usuario...');
+          setUser(userData);
+
+          console.log('[App] 📦 Cargando datos...');
+          await loadUserData(currentUser.id);
+
+          console.log('[App] ✅ CheckSession completado');
+          clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        console.error('[App] ❌ Error en checkSession:', error);
+        clearTimeout(timeoutId);
+        if (isMounted) {
+          setAuthModalOpen(true);
+          setLoading(false);
+        }
+      }
+    };
+
+    checkSession();
+
+    // Escuchar cambios en la autenticación (ANTES del return)
+    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null);
+        setTransactions([]);
+        setPrices({});
+        setInventoryMap({});
+        setCampaigns([]);
+        setLoans([]);
+        setAuthModalOpen(true);
+      } else if (event === 'SIGNED_IN' && session.user) {
+        let { data: profileData } = await getUserProfile(session.user.id);
+
+        // Si no existe el perfil, crearlo
+        if (!profileData) {
+          const { data: newProfile } = await createUserProfile(
+            session.user.id,
+            session.user.email?.split('@')[0] || 'Usuario',
+            session.user.email
+          );
+          profileData = newProfile;
+        }
 
         const userData = {
           id: session.user.id,
           email: session.user.email,
-          name: session.user.email.split('@')[0],
-          avatar: null
+          name: profileData?.name || session.user.email?.split('@')[0] || 'Usuario',
+          avatar: profileData?.avatar_url || null
         };
 
         setUser(userData);
-
-        // Cargar datos del usuario (sin bloquear)
-        console.log('[App] 📦 Cargando datos...');
         await loadUserData(session.user.id);
-
-        console.log('[App] ✅ Carga completada');
-      } catch (error) {
-        console.error('[App] Error en init:', error);
-        setAuthModalOpen(true);
-        setLoading(false);
       }
-    };
+    });
 
-    init();
-
-    // Cleanup vacío - no necesitamos listeners
     return () => {
-      console.log('[App] Cleanup useEffect');
+      console.log('[App] Cleanup useEffect - desmontando');
+      isMounted = false;
+      subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Dependencias vacías para que solo se ejecute una vez
 
   // Recargar productos cuando cambian las transacciones
   useEffect(() => {
@@ -291,33 +377,14 @@ function App() {
     if (!user) return;
 
     const list = Array.isArray(newTxns) ? newTxns : [newTxns];
-
-    console.log('[handleAddTransaction] Nueva transacción:', {
-      count: list.length,
-      firstItem: list[0],
-      hasProductId: list.length > 0 && !!list[0].productId
-    });
-
+    
     try {
       // Si las transacciones vienen del nuevo sistema (tienen productId), ya están guardadas
       // Recargar TODO desde la BD para asegurar datos actualizados
       if (list.length > 0 && list[0].productId) {
-        console.log('[handleAddTransaction] Sistema V2 detectado, recargando desde BD...');
-
         // Recargar transacciones desde la BD
         const { data: transactionsDataV2, error: transactionsErrorV2 } = await getTransactionsV2(user.id);
-
-        console.log('[handleAddTransaction] Resultado recarga:', {
-          count: transactionsDataV2?.length,
-          error: transactionsErrorV2?.message
-        });
-
-        if (transactionsErrorV2) {
-          console.error('[handleAddTransaction] Error recargando transacciones:', transactionsErrorV2);
-        }
-
         if (!transactionsErrorV2 && transactionsDataV2) {
-          console.log('[handleAddTransaction] ✅ Actualizando estado con', transactionsDataV2.length, 'transacciones');
           setTransactions(transactionsDataV2);
           recalculateInventory(transactionsDataV2);
           extractCampaigns(transactionsDataV2);
@@ -534,16 +601,32 @@ function App() {
     }
   };
 
-  return (
-    <TooltipProvider>
-      <Helmet>
-        <title>Dashboard Financiero Premium</title>
-        <meta name="description" content="Control total de Compras, Ventas, Publicidad y Ganancias." />
-      </Helmet>
+  const handleCycleClosed = (cycle) => {
+    if (user) {
+      loadUserData(user.id);
+    }
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white font-sans selection:bg-yellow-500/30">
-        <Toaster />
-        <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
+    setCycleRefreshTrigger(prev => prev + 1);
+
+    toast({
+      title: "🎉 Ciclo Cerrado",
+      description: `"${cycle.cycle_name}" guardado. Comienza nuevo ciclo.`,
+      className: "bg-green-900 border-green-600 text-white"
+    });
+  };
+
+  return (
+    <TooltipContextProvider>
+      <RadixTooltipProvider delayDuration={200}>
+        <>
+          <Helmet>
+            <title>Dashboard Financiero Premium</title>
+            <meta name="description" content="Control total de Compras, Ventas, Publicidad y Ganancias." />
+          </Helmet>
+
+          <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white font-sans selection:bg-yellow-500/30">
+            <Toaster />
+            <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
 
         {console.log('[App] Render - authModalOpen:', authModalOpen, 'user:', user, 'loading:', loading)}
 
@@ -590,7 +673,14 @@ function App() {
                         </div>
                     </div>
                     
-                    <UserProfile user={user} onLogout={handleLogout} onUpdateUser={setUser} />
+                    <UserProfile
+                      user={user}
+                      onLogout={handleLogout}
+                      onUpdateUser={setUser}
+                      isAdmin={isAdmin}
+                      onOpenAdminPanel={() => setShowAdminPanel(true)}
+                      onCycleClosed={handleCycleClosed}
+                    />
                 </div>
             </motion.header>
 
@@ -599,22 +689,21 @@ function App() {
                 <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} products={products} loans={loans} />
             </section>
 
-            {/* 2.5. Points Card - COMENTADO TEMPORALMENTE */}
-            {/* <section>
-                <PointsCard userId={user?.id} refreshTrigger={transactions.length} />
-            </section> */}
-
-            {/* 2.6. Reminders Card - CRM Follow-up Reminders */}
-            <section>
-                <RemindersCard userId={user?.id} refreshTrigger={transactions.length} />
-            </section>
-
             {/* 3. Charts Section */}
             <section>
                 <ChartsSection transactions={transactions} />
             </section>
 
-            {/* 4. Input Tabs Section */}
+            {/* 4. Historial de Ciclos */}
+            <section>
+                <HistoryCard
+                    userId={user.id}
+                    onViewAll={() => setShowCyclesHistory(true)}
+                    refreshTrigger={cycleRefreshTrigger}
+                />
+            </section>
+
+            {/* 5. Input Tabs Section */}
             <section className="bg-gray-900/40 border border-white/5 rounded-3xl p-1 backdrop-blur-sm shadow-2xl overflow-hidden">
                 <Tabs defaultValue="ventas" className="w-full">
                 <div className="px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -640,9 +729,6 @@ function App() {
                     </TabsTrigger>
                     <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-6 py-2 transition-all">
                         Precios
-                    </TabsTrigger>
-                    <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Clientes
                     </TabsTrigger>
                     </TabsList>
                 </div>
@@ -740,25 +826,21 @@ function App() {
                     <TabsContent value="precios" className="mt-0 focus-visible:outline-none">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2">
-                                <PriceManagement
-                                    transactions={transactions}
-                                    prices={prices}
-                                    onUpdatePrice={handleUpdatePrice}
+                                <PriceManagement 
+                                    transactions={transactions} 
+                                    prices={prices} 
+                                    onUpdatePrice={handleUpdatePrice} 
                                     onDeleteProduct={handleDeleteProduct}
                                     onRenameProduct={handleRenameProduct}
                                 />
                             </div>
                             <div className="lg:col-span-1">
-                                <BoxOpeningModule
+                                <BoxOpeningModule 
                                     onAdd={handleAddTransaction}
                                     products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                                 />
                             </div>
                         </div>
-                    </TabsContent>
-
-                    <TabsContent value="clientes" className="mt-0 focus-visible:outline-none">
-                        <CustomerManagement userId={user?.id} />
                     </TabsContent>
                 </div>
                 </Tabs>
@@ -769,8 +851,39 @@ function App() {
 
         {/* Error Debugger - Siempre activo para detectar problemas */}
         <ErrorDebugger enabled={true} />
-      </div>
-    </TooltipProvider>
+
+        {/* Modales de Ciclos */}
+        {showCyclesHistory && (
+          <CyclesHistoryView
+            userId={user.id}
+            isOpen={showCyclesHistory}
+            onClose={() => setShowCyclesHistory(false)}
+            onViewAnalytics={() => {
+              setShowCyclesHistory(false);
+              setShowAnalytics(true);
+            }}
+          />
+        )}
+
+        {showAnalytics && (
+          <AnalyticsDashboard
+            userId={user.id}
+            isOpen={showAnalytics}
+            onClose={() => setShowAnalytics(false)}
+          />
+        )}
+
+        {/* Panel de Administración */}
+        {showAdminPanel && isAdmin && (
+          <AdminPanel
+            currentUser={user}
+            onClose={() => setShowAdminPanel(false)}
+          />
+        )}
+          </div>
+        </>
+      </RadixTooltipProvider>
+    </TooltipContextProvider>
   );
 }
 

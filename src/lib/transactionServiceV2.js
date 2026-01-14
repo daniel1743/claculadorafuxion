@@ -9,16 +9,18 @@ import { getProductByName, upsertProduct } from './productService';
 /**
  * Obtiene todas las transacciones del usuario con información del producto
  * @param {string} userId - ID del usuario
+ * @param {number} [limit] - Límite de transacciones a cargar (default: 500)
  * @returns {Promise<{data: Array, error: Error|null}>}
  */
-export const getTransactionsV2 = async (userId) => {
+export const getTransactionsV2 = async (userId, limit = 500) => {
   try {
-    // 1. Query simple sin JOIN (mucho más rápido)
+    // 1. Query simple sin JOIN (mucho más rápido) - CON LÍMITE
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
     if (error) throw error;
 
@@ -83,7 +85,8 @@ export const getTransactionsV2 = async (userId) => {
  * @param {number} [transaction.listPrice] - Precio de lista (para crear producto si no existe)
  * @param {number} [transaction.points] - Puntos Fuxion (para crear producto si no existe)
  * @param {string} [transaction.customerId] - ID del cliente (para ventas CRM)
- * @param {string} [transaction.saleType] - Tipo de venta: 'organic', 'frequent_customer', 'referral'
+ * @param {string} [transaction.saleType] - Tipo de venta: 'organic', 'recurring', 'referral'
+ * @param {string} [transaction.referrerId] - ID del cliente que refirió (para ventas por referencia)
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const addTransactionV2 = async (transaction) => {
@@ -101,7 +104,8 @@ export const addTransactionV2 = async (transaction) => {
       listPrice,
       points = 0,
       customerId = null,
-      saleType = null
+      saleType = null,
+      referrerId = null
     } = transaction;
 
     // Validar tipo de transacción
@@ -147,7 +151,8 @@ export const addTransactionV2 = async (transaction) => {
       unit_cost_snapshot: 0, // Se actualizará automáticamente por el trigger
       notes: notes.trim(),
       customer_id: customerId || null,
-      sale_type: saleType || null
+      sale_type: saleType || null,
+      referrer_id: referrerId || null
     };
 
     const { data, error } = await supabase

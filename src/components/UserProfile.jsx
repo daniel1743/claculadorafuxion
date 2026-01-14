@@ -1,9 +1,10 @@
 
 import React, { useState, useRef } from 'react';
-import { User, LogOut, Camera, X, Check, HelpCircle } from 'lucide-react';
+import { User, LogOut, Camera, X, Check, HelpCircle, Shield, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useTooltips } from '@/contexts/TooltipContext';
+import CloseCycleModal from '@/components/CloseCycleModal';
 import {
   Dialog,
   DialogContent,
@@ -20,10 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const UserProfile = ({ user, onLogout, onUpdateUser }) => {
+const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdminPanel, onCycleClosed }) => {
   const { toast } = useToast();
   const { tooltipsEnabled, toggleTooltips } = useTooltips();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCloseCycleModalOpen, setIsCloseCycleModalOpen] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
   const [previewImage, setPreviewImage] = useState(user?.avatar || null);
   const fileInputRef = useRef(null);
@@ -97,6 +99,20 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
             <span>{tooltipsEnabled ? "Ocultar Ayudas" : "Mostrar Ayudas"}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/10" />
+          <DropdownMenuItem onClick={() => setIsCloseCycleModalOpen(true)} className="cursor-pointer text-yellow-400 hover:bg-yellow-900/20 hover:text-yellow-300 focus:bg-yellow-900/20 focus:text-yellow-300">
+            <Lock className="mr-2 h-4 w-4" />
+            <span>Cerrar Ciclo</span>
+          </DropdownMenuItem>
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem onClick={onOpenAdminPanel} className="cursor-pointer text-purple-400 hover:bg-purple-900/20 hover:text-purple-300 focus:bg-purple-900/20 focus:text-purple-300">
+                <Shield className="mr-2 h-4 w-4" />
+                <span>Panel de Admin</span>
+              </DropdownMenuItem>
+            </>
+          )}
+          <DropdownMenuSeparator className="bg-white/10" />
           <DropdownMenuItem onClick={onLogout} className="cursor-pointer text-red-400 hover:bg-red-900/20 hover:text-red-300 focus:bg-red-900/20 focus:text-red-300">
             <LogOut className="mr-2 h-4 w-4" />
             <span>Cerrar Sesión</span>
@@ -156,6 +172,19 @@ const UserProfile = ({ user, onLogout, onUpdateUser }) => {
             </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Cierre de Ciclo */}
+      <CloseCycleModal
+        isOpen={isCloseCycleModalOpen}
+        onClose={() => setIsCloseCycleModalOpen(false)}
+        userId={user?.id}
+        onCycleClosed={(cycle) => {
+          setIsCloseCycleModalOpen(false);
+          if (onCycleClosed) {
+            onCycleClosed(cycle);
+          }
+        }}
+      />
     </>
   );
 };
