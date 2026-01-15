@@ -51,7 +51,7 @@ export const generateUniqueEmail = (baseName = 'usuario') => {
 };
 
 /**
- * Crea un nuevo usuario usando Supabase Admin API
+ * Crea un nuevo usuario usando Edge Function
  * @param {Object} userData - Datos del usuario
  * @param {string} [userData.email] - Email del usuario (opcional, se genera si no se proporciona)
  * @param {string} [userData.password] - Contraseña (opcional, se genera si no se proporciona)
@@ -60,101 +60,255 @@ export const generateUniqueEmail = (baseName = 'usuario') => {
  */
 export const createNewUser = async (userData = {}) => {
   try {
-    // Generar credenciales si no se proporcionan
-    const email = userData.email || generateUniqueEmail(userData.name);
-    const password = userData.password || generateSecurePassword();
+    console.log('[adminService] 🚀 Creando usuario vía Edge Function...');
 
-    // Crear usuario con Supabase Auth Admin
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true, // Auto-confirmar email (no enviar confirmación)
-      user_metadata: {
-        name: userData.name || email.split('@')[0],
-        created_by_admin: true,
-        created_at: new Date().toISOString()
-      }
+    // Obtener el token del usuario actual
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    console.log('[adminService] 📋 Session debug:', {
+      hasSession: !!session,
+      sessionError: sessionError,
+      hasAccessToken: !!session?.access_token,
+      tokenPreview: session?.access_token?.substring(0, 50) + '...',
+      userEmail: session?.user?.email
     });
 
-    if (error) throw error;
+    if (!session) {
+      throw new Error('No hay sesión activa');
+    }
+
+    // Llamar a la Edge Function usando fetch directo para control total de headers
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const functionUrl = `${supabaseUrl}/functions/v1/admin-create-user`;
+
+    console.log('[adminService] 🌐 Llamando a:', functionUrl);
+    console.log('[adminService] 🔑 Token:', session.access_token.substring(0, 50) + '...');
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        name: userData.name || undefined,
+        email: userData.email || undefined,
+        password: userData.password || undefined
+      })
+    });
+
+    console.log('[adminService] 📋 Response status:', response.status);
+
+    const data = await response.json();
+
+    console.log('[adminService] 📋 Response data:', data);
+
+    if (!response.ok) {
+      console.error('[adminService] ❌ Error de Edge Function:', {
+        status: response.status,
+        data: data
+      });
+      throw new Error(data.error || `Error ${response.status}`);
+    }
+
+    if (data.error) {
+      console.error('[adminService] ❌ Error en respuesta:', data.error);
+      throw new Error(data.error);
+    }
+
+    console.log('[adminService] ✅ Usuario creado:', data.data.email);
 
     return {
       data: {
-        user: data.user,
-        email: email,
-        password: password // Devolver contraseña para que admin la copie
+        user: data.data.user,
+        email: data.data.email,
+        password: data.data.password
       },
       error: null
     };
   } catch (error) {
-    console.error('[adminService] Error creating user:', error);
+    console.error('[adminService] ❌ Error creating user:', {
+      message: error.message,
+      details: error
+    });
     return { data: null, error };
   }
 };
 
 /**
- * Resetea la contraseña de un usuario
+ * Resetea la contraseña de un usuario usando Edge Function
  * @param {string} userId - ID del usuario
  * @param {string} [newPassword] - Nueva contraseña (opcional, se genera si no se proporciona)
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const resetUserPassword = async (userId, newPassword = null) => {
   try {
-    const password = newPassword || generateSecurePassword();
+    console.log('[adminService] 🔑 Reseteando contraseña vía Edge Function...');
 
-    const { data, error } = await supabase.auth.admin.updateUserById(
-      userId,
-      { password: password }
-    );
+    // Obtener el token del usuario actual
+    const { data: { session } } = await supabase.auth.getSession();
 
-    if (error) throw error;
+    if (!session) {
+      throw new Error('No hay sesión activa');
+    }
+
+    // Llamar a la Edge Function con el token explícito
+    const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+      body: {
+        userId: userId,
+        newPassword: newPassword || undefined
+      },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
+    });
+
+    if (error) {
+      console.error('[adminService] ❌ Error de Edge Function:', error);
+      throw error;
+    }
+
+    if (data.error) {
+      console.error('[adminService] ❌ Error en respuesta:', data.error);
+      throw new Error(data.error);
+    }
+
+    console.log('[adminService] ✅ Contraseña reseteada exitosamente');
 
     return {
       data: {
-        user: data.user,
-        password: password // Devolver contraseña para que admin la copie
+        user: data.data.user,
+        password: data.data.password
       },
       error: null
     };
   } catch (error) {
-    console.error('[adminService] Error resetting password:', error);
+    console.error('[adminService] ❌ Error resetting password:', {
+      message: error.message,
+      details: error
+    });
     return { data: null, error };
   }
 };
 
 /**
  * Obtiene todos los usuarios del sistema
+ * MODIFICADO: Usa queries regulares en lugar de Admin API
  * @returns {Promise<{data: Array|null, error: Error|null}>}
  */
 export const getAllUsers = async () => {
   try {
-    const { data, error } = await supabase.auth.admin.listUsers();
+    console.log('[adminService] 🔍 Obteniendo usuarios desde profiles...');
 
-    if (error) throw error;
+    // PASO 1: Obtener todos los profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, created_at, updated_at')
+      .order('created_at', { ascending: false });
 
-    return { data: data.users, error: null };
+    if (profilesError) {
+      console.error('[adminService] ❌ ERROR en profiles:', {
+        code: profilesError.code,
+        message: profilesError.message,
+        details: profilesError.details,
+        hint: profilesError.hint
+      });
+      throw profilesError;
+    }
+
+    console.log('[adminService] ✅ Profiles obtenidos:', profiles?.length);
+
+    // PASO 2: Obtener todos los admin_roles
+    const { data: adminRoles, error: rolesError } = await supabase
+      .from('admin_roles')
+      .select('user_id, role, notes');
+
+    if (rolesError) {
+      console.warn('[adminService] ⚠️ Error obteniendo admin_roles:', {
+        code: rolesError.code,
+        message: rolesError.message
+      });
+      // No fallar si no podemos obtener roles, solo continuar sin ellos
+    }
+
+    console.log('[adminService] ✅ Admin roles obtenidos:', adminRoles?.length || 0);
+
+    // PASO 3: Crear un mapa de roles por user_id para lookup rápido
+    const rolesMap = new Map();
+    if (adminRoles) {
+      adminRoles.forEach(role => {
+        rolesMap.set(role.user_id, role);
+      });
+    }
+
+    // PASO 4: Combinar profiles con roles
+    const users = profiles.map(profile => {
+      const roleData = rolesMap.get(profile.id);
+
+      return {
+        id: profile.id,
+        email: profile.email || `${profile.name}@fuxion.internal`,
+        created_at: profile.created_at,
+        last_sign_in_at: profile.updated_at, // Aproximación: usar updated_at
+        user_metadata: {
+          name: profile.name,
+          avatar_url: profile.avatar_url
+        },
+        banned_until: null, // No tenemos esta info sin Admin API
+        role: roleData?.role || null,
+        role_notes: roleData?.notes || null
+      };
+    });
+
+    console.log('[adminService] ✅ Usuarios combinados:', users.length);
+
+    return { data: users, error: null };
   } catch (error) {
-    console.error('[adminService] Error getting users:', error);
+    console.error('[adminService] ❌ Error getting users:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      stack: error.stack
+    });
     return { data: null, error };
   }
 };
 
 /**
  * Obtiene un usuario por email
+ * MODIFICADO: Usa queries regulares en lugar de Admin API
  * @param {string} email - Email del usuario
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const getUserByEmail = async (email) => {
   try {
-    const { data, error } = await supabase.auth.admin.listUsers();
+    console.log('[adminService] 🔍 Buscando usuario por email:', email);
 
-    if (error) throw error;
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, name, email, created_at')
+      .eq('email', email)
+      .single();
 
-    const user = data.users.find(u => u.email === email);
-
-    if (!user) {
-      return { data: null, error: new Error('Usuario no encontrado') };
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { data: null, error: new Error('Usuario no encontrado') };
+      }
+      throw error;
     }
+
+    console.log('[adminService] ✅ Usuario encontrado:', profile.id);
+
+    // Transformar al formato esperado
+    const user = {
+      id: profile.id,
+      email: profile.email,
+      created_at: profile.created_at,
+      user_metadata: {
+        name: profile.name
+      }
+    };
 
     return { data: user, error: null };
   } catch (error) {
@@ -225,35 +379,82 @@ export const deleteUser = async (userId) => {
 
 /**
  * Obtiene estadísticas de usuarios
+ * MODIFICADO: Usa queries regulares en lugar de Admin API
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const getUserStats = async () => {
   try {
-    const { data, error } = await supabase.auth.admin.listUsers();
+    console.log('[adminService] 📊 Calculando estadísticas de usuarios...');
 
-    if (error) throw error;
+    // Obtener todos los profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, created_at, updated_at');
 
+    if (profilesError) {
+      console.error('[adminService] ❌ ERROR en profiles:', {
+        code: profilesError.code,
+        message: profilesError.message,
+        details: profilesError.details,
+        hint: profilesError.hint
+      });
+      throw profilesError;
+    }
+
+    console.log('[adminService] ✅ Profiles obtenidos:', profiles?.length);
+
+    // Obtener transacciones recientes para calcular actividad
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    const { data: recentTransactions, error: transError } = await supabase
+      .from('transactions')
+      .select('user_id, created_at')
+      .gte('created_at', sevenDaysAgo.toISOString());
+
+    if (transError) {
+      console.warn('[adminService] ⚠️ Error obteniendo transacciones:', {
+        code: transError.code,
+        message: transError.message,
+        details: transError.details
+      });
+    }
+
+    // Calcular usuarios activos basado en transacciones
+    const activeToday = new Set();
+    const activeWeek = new Set();
+
+    if (recentTransactions) {
+      recentTransactions.forEach(t => {
+        const transDate = new Date(t.created_at);
+        if (transDate > oneDayAgo) {
+          activeToday.add(t.user_id);
+        }
+        if (transDate > sevenDaysAgo) {
+          activeWeek.add(t.user_id);
+        }
+      });
+    }
+
     const stats = {
-      total: data.users.length,
-      active_today: data.users.filter(u => {
-        const lastSignIn = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
-        return lastSignIn && lastSignIn > oneDayAgo;
-      }).length,
-      active_week: data.users.filter(u => {
-        const lastSignIn = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
-        return lastSignIn && lastSignIn > sevenDaysAgo;
-      }).length,
-      never_logged_in: data.users.filter(u => !u.last_sign_in_at).length,
-      banned: data.users.filter(u => u.banned_until).length
+      total: profiles?.length || 0,
+      active_today: activeToday.size,
+      active_week: activeWeek.size,
+      never_logged_in: 0, // No podemos saber esto sin Admin API
+      banned: 0 // No podemos saber esto sin Admin API
     };
+
+    console.log('[adminService] ✅ Estadísticas:', stats);
 
     return { data: stats, error: null };
   } catch (error) {
-    console.error('[adminService] Error getting user stats:', error);
+    console.error('[adminService] ❌ Error getting user stats:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      stack: error.stack
+    });
     return { data: null, error };
   }
 };

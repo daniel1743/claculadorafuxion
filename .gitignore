@@ -45,5 +45,42 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-test-*.js
 node_modules
+
+# ═══════════════════════════════════════════════════════════
+# ARCHIVOS CON DATOS SENSIBLES - NO SUBIR A GITHUB
+# ═══════════════════════════════════════════════════════════
+
+# Documentación con URLs/Keys de Supabase
+CONFIGURACION-SUPABASE.md
+SETUP-SUPABASE-NUEVO.md
+INSTRUCCIONES_EDGE_FUNCTIONS.md
+SOLUCION_ADMIN_PANEL_ERROR_403.md
+SOLUCION-VARIABLES-ENTORNO.md
+SOLUCION-TIMEOUT-GUARDAR-PRECIOS.md
+SOLUCION-RAPIDA-TIMEOUT.md
+SOLUCION-PRECIOS.md
+FIX-TIMEOUT-PROFILES.md
+CREAR-TABLA-LOANS.md
+ERROR-DEBUGGER-README.md
+RESUMEN_GENERADOR_CREDENCIALES.md
+RESUMEN-EJECUTIVO-ESTADO.md
+RESUMEN-CORRECCIONES-APLICADAS.md
+EVALUACION-EXHAUSTIVA-COMPLETA.md
+EVALUACION-FINAL-COMPLETA.md
+ADMIN_PANEL_DOCUMENTATION.md
+
+# Archivos de test con credenciales
+test-*.js
+test-*.html
+diagnostico.html
+
+# SQL con configuración específica
+supabase-setup.sql
+
+# Carpeta docs con información sensible
+docs/reparaciones/
+docs/soluciones/
+docs/instrucciones/
+docs/configuracion/
+docs/informes/
