@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
@@ -24,12 +24,15 @@ import UserProfile from '@/components/UserProfile';
 import AdminPanel from '@/components/AdminPanel';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
+import { supabase } from '@/lib/supabase';
 import { getTransactionsV2 } from '@/lib/transactionServiceV2';
 import { getUserProductsWithInventory } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
 import { useToast } from '@/components/ui/use-toast';
 import ErrorDebugger from '@/components/ErrorDebugger';
 import HistoryCard from '@/components/HistoryCard';
+import CustomerManagement from '@/components/CustomerManagement';
+import RemindersCard from '@/components/RemindersCard';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import { TooltipProvider as TooltipContextProvider } from '@/contexts/TooltipContext';
@@ -334,11 +337,13 @@ Ver consola para más detalles (F12)
     if (!user) return;
 
     const list = Array.isArray(newTxns) ? newTxns : [newTxns];
-    
+
     try {
-      // Si las transacciones vienen del nuevo sistema (tienen productId), ya están guardadas
-      // Recargar TODO desde la BD para asegurar datos actualizados
-      if (list.length > 0 && list[0].productId) {
+      // Si las transacciones ya tienen ID, ya fueron guardadas por addTransactionV2
+      // Esto incluye: transacciones con productId O transacciones de publicidad (productId=null pero tienen id)
+      const alreadySaved = list.length > 0 && (list[0].productId || list[0].id);
+
+      if (alreadySaved) {
         // Recargar transacciones desde la BD
         const { data: transactionsDataV2, error: transactionsErrorV2 } = await getTransactionsV2(user.id);
         if (!transactionsErrorV2 && transactionsDataV2) {
@@ -397,7 +402,7 @@ Ver consola para más detalles (F12)
 
     try {
       const { error } = await deleteTransaction(id);
-      
+
       if (error) throw error;
 
       const newTransactions = transactions.filter(t => t.id !== id);
@@ -409,6 +414,36 @@ Ver consola para más detalles (F12)
       toast({
         title: "Error",
         description: "No se pudo eliminar la transacción. Por favor, intenta de nuevo.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Editar monto de publicidad (IVA, comisiones bancarias)
+  const handleEditAdAmount = async (id, newAmount) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ total_amount: newAmount })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      // Actualizar estado local
+      const updatedTransactions = transactions.map(t =>
+        t.id === id ? { ...t, total: newAmount, totalAmount: newAmount } : t
+      );
+      setTransactions(updatedTransactions);
+      extractCampaigns(updatedTransactions);
+
+    } catch (error) {
+      console.error('Error actualizando monto:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el monto. Intenta de nuevo.",
         variant: "destructive"
       });
     }
@@ -740,6 +775,9 @@ Ver consola para más detalles (F12)
                     <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-6 py-2 transition-all">
                         Precios
                     </TabsTrigger>
+                    <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
+                        Clientes
+                    </TabsTrigger>
                     </TabsList>
                 </div>
 
@@ -747,9 +785,9 @@ Ver consola para más detalles (F12)
                     <TabsContent value="compras" className="mt-0 focus-visible:outline-none">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-1">
-                            <ShoppingCartModule 
-                              onAdd={handleAddTransaction} 
-                              prices={prices} 
+                            <PurchaseModule
+                              onAdd={handleAddTransaction}
+                              prices={prices}
                               products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                             />
                         </div>
@@ -765,7 +803,7 @@ Ver consola para más detalles (F12)
                             <AdModule onAdd={handleAddTransaction} />
                         </div>
                         <div className="lg:col-span-2">
-                            <DataTable typeFilter="publicidad" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Publicidad" icon={Megaphone} color="blue" />
+                            <DataTable typeFilter="publicidad" transactions={transactions} onDelete={handleDeleteTransaction} onEditAmount={handleEditAdAmount} title="Historial de Publicidad" icon={Megaphone} color="blue" />
                         </div>
                     </div>
                     </TabsContent>
@@ -879,6 +917,29 @@ Ver consola para más detalles (F12)
                                     productsV2={products}
                                 />
                             </div>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="clientes" className="mt-0 focus-visible:outline-none">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <CustomerManagement userId={user?.id} />
+                            </div>
+                            <div>
+                                <RemindersCard userId={user?.id} refreshTrigger={cycleRefreshTrigger} />
+                            </div>
+                        </div>
+                        <div className="mt-6 p-4 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                          <h4 className="text-sm font-bold text-purple-400 mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            ¿Cómo funciona?
+                          </h4>
+                          <ul className="text-xs text-gray-400 space-y-1">
+                            <li>• <strong>Crear clientes</strong> aquí para usarlos en ventas Recurrentes y Referidos</li>
+                            <li>• En <strong>Ventas</strong>, selecciona "Venta Frecuente" o "Venta de Referidos"</li>
+                            <li>• Los <strong>recordatorios automáticos</strong> se crean a los 15 y 30 días de cada venta</li>
+                            <li>• Al hacer clic en un cliente verás su <strong>historial de compras</strong> y <strong>referidos</strong></li>
+                          </ul>
                         </div>
                     </TabsContent>
                 </div>

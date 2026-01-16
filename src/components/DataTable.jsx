@@ -1,13 +1,15 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowUpRight, ArrowDownRight, Megaphone, Inbox } from 'lucide-react';
+import { Trash2, ArrowUpRight, ArrowDownRight, Megaphone, Inbox, Pencil, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { formatCLP } from '@/lib/utils';
 
-const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, color }) => {
+const DataTable = ({ transactions, onDelete, onEditAmount, typeFilter, title, icon: Icon, color }) => {
   const { toast } = useToast();
+  const [editingId, setEditingId] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
 
   const handleDelete = (id) => {
     onDelete(id);
@@ -16,6 +18,40 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
       description: "La transacción ha sido removida correctamente.",
       className: "bg-red-900 border-red-600 text-white"
     });
+  };
+
+  const handleStartEdit = (transaction) => {
+    setEditingId(transaction.id);
+    setEditAmount(transaction.total || transaction.totalAmount || 0);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditAmount('');
+  };
+
+  const handleSaveEdit = async (id) => {
+    const newAmount = parseFloat(editAmount);
+    if (isNaN(newAmount) || newAmount < 0) {
+      toast({
+        title: "Monto Inválido",
+        description: "Ingresa un monto válido mayor o igual a 0.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (onEditAmount) {
+      await onEditAmount(id, newAmount);
+      toast({
+        title: "Monto Actualizado",
+        description: `El monto final ha sido actualizado a ${formatCLP(newAmount)}`,
+        className: "bg-green-900 border-green-600 text-white"
+      });
+    }
+
+    setEditingId(null);
+    setEditAmount('');
   };
 
   // Filtrar por tipo, soportando múltiples tipos equivalentes
@@ -43,6 +79,9 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
     blue: "text-blue-400"
   };
   const accentColor = colorClasses[color] || "text-gray-400";
+
+  // Verificar si es tabla de publicidad
+  const isAdvertising = typeFilter === 'publicidad' || typeFilter === 'advertising';
 
   if (filteredTransactions.length === 0) {
     return (
@@ -106,7 +145,24 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
                   {t.quantity || '-'}
                 </td>
                 <td className={`px-6 py-4 text-right font-bold font-mono ${accentColor}`}>
-                  {formatCLP(t.total)}
+                  {editingId === t.id ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-gray-500">$</span>
+                      <input
+                        type="number"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="w-24 bg-black/40 border border-blue-500/50 rounded px-2 py-1 text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEdit(t.id);
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    formatCLP(t.total)
+                  )}
                 </td>
                 <td className="px-6 py-4 text-center text-xs">
                   {t.freeUnits ? (
@@ -116,20 +172,66 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
                   ) : <span className="text-gray-600">-</span>}
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(t.id)}
-                    className="text-gray-500 hover:text-red-400 hover:bg-red-900/20 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center justify-center gap-1">
+                    {editingId === t.id ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSaveEdit(t.id)}
+                          className="text-green-500 hover:text-green-400 hover:bg-green-900/20 h-8 w-8 p-0"
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                          className="text-gray-500 hover:text-gray-400 hover:bg-gray-900/20 h-8 w-8 p-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {/* Botón editar solo para publicidad */}
+                        {isAdvertising && onEditAmount && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStartEdit(t)}
+                            className="text-gray-500 hover:text-blue-400 hover:bg-blue-900/20 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Editar monto final (IVA, comisiones bancarias)"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(t.id)}
+                          className="text-gray-500 hover:text-red-400 hover:bg-red-900/20 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Nota para publicidad */}
+      {isAdvertising && onEditAmount && (
+        <div className="px-4 py-2 bg-blue-500/5 border-t border-blue-500/10">
+          <p className="text-xs text-blue-300/70">
+            💡 Puedes editar el monto final de cada campaña para incluir IVA y comisiones bancarias
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 };

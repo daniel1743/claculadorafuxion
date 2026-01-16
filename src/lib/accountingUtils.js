@@ -162,19 +162,18 @@ export const calculateInventoryValue = (products) => {
   let totalValue = 0;
 
   products.forEach(product => {
-    const {
-      current_stock_boxes = 0,
-      current_marketing_stock = 0,
-      weighted_average_cost = 0,
-      sachets_per_box = 28
-    } = product;
+    // Soportar tanto snake_case como camelCase
+    const stockBoxes = product.current_stock_boxes ?? product.currentStockBoxes ?? 0;
+    const marketingStock = product.current_marketing_stock ?? product.currentMarketingStock ?? 0;
+    const avgCost = product.weighted_average_cost ?? product.weightedAverageCost ?? 0;
+    const sachetsPerBox = product.sachets_per_box ?? product.sachetsPerBox ?? 28;
 
     // Valor de cajas
-    const boxesValue = (parseInt(current_stock_boxes) || 0) * parseFloat(weighted_average_cost);
+    const boxesValue = (parseInt(stockBoxes) || 0) * parseFloat(avgCost);
 
     // Valor de sobres (convertir a equivalente de cajas)
-    const sachetsEquivalent = (parseInt(current_marketing_stock) || 0) / (parseInt(sachets_per_box) || 28);
-    const sachetsValue = sachetsEquivalent * parseFloat(weighted_average_cost);
+    const sachetsEquivalent = (parseInt(marketingStock) || 0) / (parseInt(sachetsPerBox) || 28);
+    const sachetsValue = sachetsEquivalent * parseFloat(avgCost);
 
     totalValue += boxesValue + sachetsValue;
   });

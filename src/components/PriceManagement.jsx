@@ -1,50 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Tag, DollarSign, Search, AlertCircle, Plus, Pencil, Trash2, AlertTriangle, Gift, Download, Loader2 } from 'lucide-react';
+import { Tag, DollarSign, Search, AlertCircle, Plus, Pencil, Trash2, AlertTriangle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { formatCLP } from '@/lib/utils';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
 import { upsertProduct } from '@/lib/productService';
 import { formatInventory } from '@/lib/inventoryUtils';
-
-// Catálogo oficial de productos FuXion con precios de lista
-const FUXION_CATALOG = {
-  "REXET": 36000,
-  "PRUNEX1": 23300,
-  "FLORA LIV": 43000,
-  "LIQUID FIBER": 28750,
-  "BERRY BALANCE": 46500,
-  "α BALANCE": 36000,
-  "PACK DETOX 5-DÍAS": 48650,
-  "BIOPRO TECT +": 34000,
-  "PROTEIN ACTIVE (Vainilla y Canela)": 39500,
-  "PROTEIN ACTIVE (Chocolate con Avellanas)": 40000,
-  "VITAENERGIA": 36000,
-  "VITA XTRA T+": 36000,
-  "NUTRADAY": 36000,
-  "VERA+": 46500,
-  "GANO CAPPUCCINO +": 33250,
-  "THERMO T3": 36000,
-  "NOCARB-T": 36000,
-  "CAFÉ & CAFÉ FIT CAPPUCCINO": 51500,
-  "BIOPRO FIT +": 30250,
-  "PROTEIN ACTIVE FIT (Vainilla y Canela)": 41500,
-  "PROTEIN ACTIVE FIT (Chocolate con Avellanas)": 41750,
-  "PACK CONTROL DE PESO (5 productos)": 111000,
-  "PACK 5/14 ACTIVE": 120900,
-  "YOUTH ELIXIR": 36000,
-  "BEAUTY-IN": 44750,
-  "PASSION": 36000,
-  "GOLDEN FLX": 39250,
-  "PROBAL": 44750,
-  "ON": 28750,
-  "NO STRESS": 39750,
-  "BIOPRO SPORT +": 37750,
-  "PRE SPORT": 39250,
-  "POST SPORT": 39250
-};
 import {
   Dialog,
   DialogContent,
@@ -68,55 +31,6 @@ const PriceManagement = ({ transactions, prices, productsV2: productsV2Prop = []
   const [editingProduct, setEditingProduct] = useState(null); // Original name before edit
   const [deletingProduct, setDeletingProduct] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
-
-  // Función para cargar el catálogo FuXion completo
-  const loadFuxionCatalog = async () => {
-    setIsLoadingCatalog(true);
-    const entries = Object.entries(FUXION_CATALOG);
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      for (const [name, price] of entries) {
-        const result = await upsertProduct({
-          name: name,
-          list_price: price,
-          points: 0 // Los puntos se agregarán después
-        });
-
-        if (result.error) {
-          console.error(`Error cargando ${name}:`, result.error);
-          errorCount++;
-        } else {
-          successCount++;
-        }
-      }
-
-      // Recargar precios después de cargar el catálogo
-      if (successCount > 0 && onUpdatePrice) {
-        // Trigger a refresh by calling onUpdatePrice with the first product
-        const firstEntry = entries[0];
-        await onUpdatePrice(firstEntry[0], firstEntry[1]);
-      }
-
-      toast({
-        title: successCount > 0 ? "Catálogo Cargado" : "Error",
-        description: `${successCount} productos agregados${errorCount > 0 ? `, ${errorCount} errores` : ''}.`,
-        className: successCount > 0 ? "bg-green-900 border-green-600 text-white" : undefined,
-        variant: successCount === 0 ? "destructive" : undefined
-      });
-    } catch (error) {
-      console.error('Error cargando catálogo:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo cargar el catálogo. Intenta de nuevo.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoadingCatalog(false);
-    }
-  };
 
   // Usar productsV2 del prop (datos reales de App.jsx)
   // Combinar productos de productsV2Prop con productos de transactions/prices que no estén en V2
@@ -290,18 +204,6 @@ const PriceManagement = ({ transactions, prices, productsV2: productsV2Prop = []
                     className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-yellow-500/20 outline-none transition-all"
                 />
             </div>
-            <Button
-              onClick={loadFuxionCatalog}
-              disabled={isLoadingCatalog}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold disabled:opacity-50"
-            >
-                {isLoadingCatalog ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                {isLoadingCatalog ? 'Cargando...' : 'Cargar Catálogo FuXion'}
-            </Button>
             <Button onClick={openAddModal} className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold">
                 <Plus className="w-4 h-4 mr-2" />
                 Agregar Producto

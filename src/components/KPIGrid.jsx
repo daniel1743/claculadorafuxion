@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Percent, Wallet, HandHeart } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Percent, Wallet, HandHeart, Star } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
@@ -146,40 +146,57 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
     // Let's try to be smart: Value of Free Items is usually realized when sold.
     const freeProductProfit = freeProducts * avgSalePrice; // Keep as realized potential based on history?
     
-    // Actually, "Valor Prod. Gratis" usually means "How much are these free items WORTH if I sell them?"
-    // If we have prices, we should use them.
-    // Since we don't know WHICH products are the free ones (data structure limitation), we estimate.
-    // But wait, we can check the purchase history to see which products generated free units.
+    // "Valor Prod. Gratis" = valor de mercado de los regalos/bonificaciones
+    // Detectar regalos:
+    // 1. Sistema antiguo: freeUnits > 0
+    // 2. Sistema V2 antiguo: notas con "Producto Gratis"
+    // 3. Sistema V2 nuevo: totalAmount = 0 y notas con "REGALO"
     let freeValueCalc = 0;
+    let totalGiftUnits = 0;
+
     transactions.filter(t => {
       const isPurchase = t.type === 'compra' || t.type === 'purchase';
-      if (t.type === 'compra') {
-        return isPurchase && (t.freeUnits > 0);
-      } else {
-        // Para transacciones V2, buscar en notas
-        return isPurchase && t.notes && t.notes.includes('Producto Gratis');
-      }
+      if (!isPurchase) return false;
+
+      // Sistema antiguo
+      if (t.type === 'compra' && t.freeUnits > 0) return true;
+
+      // Sistema V2 - detectar regalos por totalAmount = 0 o notas con REGALO
+      const amount = t.total || t.totalAmount || 0;
+      const notes = t.notes || '';
+
+      if (amount === 0 && notes.includes('REGALO')) return true;
+      if (notes.includes('Producto Gratis')) return true;
+
+      return false;
     }).forEach(t => {
-      if (t.type === 'compra') {
-        // Transacciones antiguas
+      const notes = t.notes || '';
+
+      if (t.type === 'compra' && t.freeUnits > 0) {
+        // Transacciones antiguas con freeUnits
         const unitPrice = prices[t.productName] || avgSalePrice;
         freeValueCalc += (t.freeUnits || 0) * unitPrice;
+        totalGiftUnits += t.freeUnits || 0;
       } else {
         // Transacciones V2 - extraer valor de mercado de las notas
-        // Formato: "Valor Mercado: $X,XXX"
-        const notes = t.notes || '';
-        const valorMatch = notes.match(/Valor Mercado:\s*\$?([\d,]+)/);
+        // Formato nuevo: "REGALO - Valor de mercado: $X,XXX"
+        // Formato antiguo: "Valor Mercado: $X,XXX"
+        const valorMatch = notes.match(/[Vv]alor\s*(?:de\s*)?[Mm]ercado:\s*\$?([\d.,]+)/);
         if (valorMatch) {
-          const valor = parseFloat(valorMatch[1].replace(/,/g, ''));
+          const valor = parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.'));
           freeValueCalc += valor;
         } else {
-          // Fallback: usar precio del producto
+          // Fallback: usar precio del producto desde prices
           const unitPrice = prices[t.productName] || avgSalePrice;
-          const quantity = t.quantityBoxes || 1;
+          const quantity = t.quantityBoxes || t.quantity || 1;
           freeValueCalc += unitPrice * quantity;
         }
+        totalGiftUnits += t.quantityBoxes || t.quantity || 0;
       }
     });
+
+    // Actualizar contador de productos gratis
+    freeProducts = totalGiftUnits;
 
     let bestCampaign = 'N/A';
     let bestROI = -Infinity;
@@ -220,6 +237,51 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }
       }
     });
+
+    // NUEVO: Calcular puntos acumulados de compras
+    let totalPoints = 0;
+    const pointsByProduct = [];
+
+    // Crear mapa de puntos por producto
+    const productPointsMap = {};
+    if (products && products.length > 0) {
+      products.forEach(p => {
+        if (p.points > 0) {
+          productPointsMap[p.name] = p.points;
+        }
+      });
+    }
+
+    // Sumar puntos de cada compra
+    transactions.forEach(t => {
+      const isPurchase = t.type === 'compra' || t.type === 'purchase';
+      if (isPurchase) {
+        const productName = t.productName;
+        const quantity = t.quantityBoxes || t.quantity || 0;
+        const pointsPerUnit = productPointsMap[productName] || 0;
+        const pointsEarned = quantity * pointsPerUnit;
+
+        if (pointsEarned > 0) {
+          totalPoints += pointsEarned;
+
+          // Agregar al preview por producto
+          const existingEntry = pointsByProduct.find(p => p.label === productName);
+          if (existingEntry) {
+            existingEntry.points += pointsEarned;
+            existingEntry.value = `${existingEntry.points} pts`;
+          } else {
+            pointsByProduct.push({
+              label: productName,
+              points: pointsEarned,
+              value: `${pointsEarned} pts`
+            });
+          }
+        }
+      }
+    });
+
+    // Ordenar por puntos y tomar top 3
+    pointsByProduct.sort((a, b) => b.points - a.points);
 
     // NUEVO: Calcular préstamos totales
     let totalLoanedBoxes = 0;
@@ -273,7 +335,9 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       profitPreview,
       totalLoanedBoxes,
       totalLoanedValue,
-      loansByProduct
+      loansByProduct,
+      totalPoints,
+      pointsByProduct
     };
   }, [transactions, inventoryMap, prices, products, loans]);
 
@@ -344,6 +408,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           delay={0.25}
           onClick={() => handleCardClick('ads', 'Rendimiento de Campañas', 'gold')}
         />
+        {/* COMENTADO: Tarjeta Producción Gratuita
         <MetricCard
           title="Prod. Gratis (4x1)"
           value={metrics.freeProducts}
@@ -352,6 +417,17 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           color="purple"
           delay={0.3}
           onClick={() => handleCardClick('inventory', 'Bonificaciones', 'purple')}
+        />
+        */}
+        <MetricCard
+          title="Puntos Acumulados"
+          value={metrics.totalPoints.toLocaleString()}
+          icon={Star}
+          trend="Puntos FuXion"
+          color="purple"
+          delay={0.3}
+          hoverData={metrics.pointsByProduct.slice(0, 3)}
+          onClick={() => handleCardClick('inventory', 'Puntos por Producto', 'purple')}
         />
         <MetricCard
           title="Valor Prod. Gratis"
