@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, DollarSign, FileText, User, HandCoins, Trash2, ShoppingCart } from 'lucide-react';
+import { Plus, Tag, Hash, DollarSign, FileText, User, HandCoins, Trash2, ShoppingCart, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -241,8 +241,8 @@ const LoanModule = ({ onAdd, prices = {}, products = [], inventoryMap = {} }) =>
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6 h-full"
     >
       <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-purple-500 rounded-full"></span>
-        Registrar Préstamo
+        <Send className="w-5 h-5 text-purple-400" />
+        Prestar Producto
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -412,10 +412,10 @@ const LoanModule = ({ onAdd, prices = {}, products = [], inventoryMap = {} }) =>
           disabled={cart.length === 0}
           className="w-full h-12 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-lg shadow-purple-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          <HandCoins className="w-5 h-5 mr-2" />
-          {cart.length > 0 
-            ? `Registrar ${cart.length} Préstamo${cart.length > 1 ? 's' : ''} ($${cartTotal.toLocaleString('es-CO')})`
-            : 'Registrar Préstamo'
+          <Send className="w-5 h-5 mr-2" />
+          {cart.length > 0
+            ? `Prestar ${cart.length} Producto${cart.length > 1 ? 's' : ''} ($${cartTotal.toLocaleString('es-CO')})`
+            : 'Prestar Producto'
           }
         </Button>
       </form>

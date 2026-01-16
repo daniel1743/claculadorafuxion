@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HandCoins, Plus, Tag, Hash, User, Phone, Calendar, FileText, RotateCcw, Trash2, CheckCircle } from 'lucide-react';
+import { HandCoins, Plus, Tag, Hash, User, Phone, Calendar, FileText, RotateCcw, Trash2, CheckCircle, PackagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -219,8 +219,8 @@ const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
     >
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <span className="w-1 h-6 bg-cyan-500 rounded-full"></span>
-          Préstamos Recibidos (de Socios)
+          <PackagePlus className="w-5 h-5 text-cyan-400" />
+          Recibir de Socio
           {stats?.pendingCount > 0 && (
             <span className="ml-2 bg-cyan-600 text-white text-xs px-2 py-1 rounded-full font-bold">
               {stats.pendingCount} pendientes
@@ -359,8 +359,8 @@ const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
           type="submit"
           className="w-full h-11 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-semibold shadow-lg shadow-cyan-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          <HandCoins className="w-5 h-5 mr-2" />
-          Registrar Préstamo Recibido
+          <PackagePlus className="w-5 h-5 mr-2" />
+          Recibir Producto de Socio
         </Button>
       </form>
 

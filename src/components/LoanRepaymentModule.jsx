@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, FileText, HandCoins, AlertCircle } from 'lucide-react';
+import { Plus, Tag, Hash, FileText, HandCoins, AlertCircle, PackageCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -170,8 +170,8 @@ const LoanRepaymentModule = ({ onAdd, loans = [], products = [] }) => {
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6 h-full"
     >
       <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-orange-500 rounded-full"></span>
-        Devolver Préstamo
+        <PackageCheck className="w-5 h-5 text-orange-400" />
+        Recibir Producto
       </h3>
 
       {Object.keys(loanBalances).length === 0 && (
@@ -258,8 +258,8 @@ const LoanRepaymentModule = ({ onAdd, loans = [], products = [] }) => {
           disabled={loading || !currentBalance}
           className="w-full h-12 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
-          <HandCoins className="w-5 h-5 mr-2" />
-          {loading ? 'Procesando...' : 'Registrar Devolución'}
+          <PackageCheck className="w-5 h-5 mr-2" />
+          {loading ? 'Procesando...' : 'Recibir Producto'}
         </Button>
       </form>
 

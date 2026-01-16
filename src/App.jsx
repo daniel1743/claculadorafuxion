@@ -725,11 +725,11 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="prestamos" className="mt-0 focus-visible:outline-none">
-                    {/* Sección: Préstamos Dados (cuando vendes sin stock) */}
+                    {/* Sección: Prestar Producto (cuando prestas tu stock) */}
                     <div className="mb-4">
                       <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2 mb-4">
                         <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                        Préstamos Dados (debes devolver producto)
+                        📤 Prestar Producto (te deben devolver)
                       </h2>
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                           <div>
@@ -750,11 +750,11 @@ Ver consola para más detalles (F12)
                       </div>
                     </div>
 
-                    {/* Sección: Préstamos Recibidos (de socios) */}
+                    {/* Sección: Recibir de Socios (ellos te prestan) */}
                     <div className="mb-8">
                       <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2 mb-4">
                         <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
-                        Préstamos Recibidos (de socios - debes devolverles)
+                        📥 Recibir de Socio (debes devolverles)
                       </h2>
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                           <BorrowingModule
