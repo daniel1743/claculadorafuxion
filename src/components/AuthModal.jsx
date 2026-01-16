@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Mail, User, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, ShieldCheck, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -17,11 +17,20 @@ const AuthModal = ({ isOpen, onLogin }) => {
   const { toast } = useToast();
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: ''
   });
+
+  // Cargar preferencia de "recordar sesión" al montar
+  useEffect(() => {
+    const savedRemember = localStorage.getItem('fuxionRememberMe');
+    if (savedRemember === 'true') {
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,6 +60,15 @@ const AuthModal = ({ isOpen, onLogin }) => {
             avatar: null
           };
 
+          // Guardar preferencia de recordar sesión
+          if (rememberMe) {
+            localStorage.setItem('fuxionRememberMe', 'true');
+            localStorage.setItem('fuxionSavedUser', JSON.stringify(user));
+          } else {
+            localStorage.removeItem('fuxionRememberMe');
+            localStorage.removeItem('fuxionSavedUser');
+          }
+
           onLogin(user);
           toast({
             title: "¡Bienvenido!",
@@ -65,12 +83,32 @@ const AuthModal = ({ isOpen, onLogin }) => {
         if (error) throw error;
 
         if (data?.user) {
+          // Cargar nombre personalizado desde localStorage si existe
+          const savedProfile = localStorage.getItem('fuxionUserProfile');
+          let customName = data.user.email.split('@')[0];
+          let avatar = null;
+
+          if (savedProfile) {
+            const profile = JSON.parse(savedProfile);
+            if (profile.name) customName = profile.name;
+            if (profile.avatar) avatar = profile.avatar;
+          }
+
           const user = {
             id: data.user.id,
             email: data.user.email,
-            name: data.user.email.split('@')[0],
-            avatar: null
+            name: customName,
+            avatar: avatar
           };
+
+          // Guardar preferencia de recordar sesión
+          if (rememberMe) {
+            localStorage.setItem('fuxionRememberMe', 'true');
+            localStorage.setItem('fuxionSavedUser', JSON.stringify(user));
+          } else {
+            localStorage.removeItem('fuxionRememberMe');
+            localStorage.removeItem('fuxionSavedUser');
+          }
 
           onLogin(user);
           toast({
@@ -82,10 +120,10 @@ const AuthModal = ({ isOpen, onLogin }) => {
       }
     } catch (error) {
       console.error('Error en autenticación:', error);
-      
+
       // Mensajes de error más claros y específicos
       let errorMessage = '';
-      
+
       if (isRegistering) {
         if (error.message?.includes('already registered') || error.code === 'signup_disabled') {
           errorMessage = 'Este correo electrónico ya está registrado. Intenta iniciar sesión en su lugar.';
@@ -103,7 +141,7 @@ const AuthModal = ({ isOpen, onLogin }) => {
           errorMessage = 'No se pudo iniciar sesión. Verifica tus credenciales e intenta de nuevo.';
         }
       }
-      
+
       toast({
         title: isRegistering ? "Error al registrarse" : "Error al iniciar sesión",
         description: errorMessage,
@@ -118,7 +156,7 @@ const AuthModal = ({ isOpen, onLogin }) => {
     <Dialog open={isOpen} modal={true}>
       <DialogContent className="sm:max-w-md bg-gray-950 border border-white/10 p-0 overflow-hidden [&>button]:hidden">
          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 via-transparent to-transparent opacity-50" />
-         
+
          <div className="p-8 relative z-10">
             <div className="flex justify-center mb-6">
                 <div className="p-4 rounded-full bg-white/5 border border-white/10 shadow-2xl shadow-yellow-500/20">
@@ -128,12 +166,12 @@ const AuthModal = ({ isOpen, onLogin }) => {
 
             <DialogHeader className="text-center space-y-2 mb-6">
               <DialogTitle className="text-2xl font-bold text-white tracking-tight">
-                 {isRegistering ? 'Crear Cuenta Premium' : 'Bienvenido de Nuevo'}
+                 {isRegistering ? 'Crear Cuenta' : 'Bienvenido de Nuevo'}
               </DialogTitle>
               <DialogDescription className="text-gray-400">
-                {isRegistering 
-                    ? 'Ingresa tus datos para configurar tu dashboard financiero.' 
-                    : 'Ingresa tus credenciales para acceder a tus métricas.'}
+                {isRegistering
+                    ? 'Ingresa tus datos para configurar tu dashboard.'
+                    : 'Ingresa tus credenciales para acceder.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -142,8 +180,8 @@ const AuthModal = ({ isOpen, onLogin }) => {
                  <div className="space-y-2">
                     <div className="relative group">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             placeholder="Nombre Completo"
                             className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none transition-all placeholder-gray-600 text-sm"
                             value={formData.name}
@@ -152,12 +190,12 @@ const AuthModal = ({ isOpen, onLogin }) => {
                     </div>
                  </div>
                )}
-               
+
                <div className="space-y-2">
                   <div className="relative group">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
-                      <input 
-                          type="email" 
+                      <input
+                          type="email"
                           placeholder="Correo Electrónico"
                           className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none transition-all placeholder-gray-600 text-sm"
                           value={formData.email}
@@ -169,14 +207,35 @@ const AuthModal = ({ isOpen, onLogin }) => {
                <div className="space-y-2">
                   <div className="relative group">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
-                      <input 
-                          type="password" 
+                      <input
+                          type="password"
                           placeholder="Contraseña"
                           className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none transition-all placeholder-gray-600 text-sm"
                           value={formData.password}
                           onChange={(e) => setFormData({...formData, password: e.target.value})}
                       />
                   </div>
+               </div>
+
+               {/* Checkbox Mantener sesión iniciada */}
+               <div className="flex items-center gap-3">
+                 <button
+                   type="button"
+                   onClick={() => setRememberMe(!rememberMe)}
+                   className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                     rememberMe
+                       ? 'bg-yellow-500 border-yellow-500'
+                       : 'border-gray-600 hover:border-yellow-500/50'
+                   }`}
+                 >
+                   {rememberMe && <Check className="w-3 h-3 text-black" />}
+                 </button>
+                 <span
+                   className="text-sm text-gray-400 cursor-pointer select-none"
+                   onClick={() => setRememberMe(!rememberMe)}
+                 >
+                   Mantener sesión iniciada
+                 </span>
                </div>
 
                <Button
@@ -198,12 +257,12 @@ const AuthModal = ({ isOpen, onLogin }) => {
             </form>
 
             <div className="mt-6 text-center">
-                <button 
+                <button
                     onClick={() => setIsRegistering(!isRegistering)}
                     className="text-xs text-gray-500 hover:text-yellow-400 transition-colors underline underline-offset-4"
                 >
-                    {isRegistering 
-                        ? '¿Ya tienes cuenta? Inicia sesión' 
+                    {isRegistering
+                        ? '¿Ya tienes cuenta? Inicia sesión'
                         : '¿No tienes cuenta? Regístrate gratis'}
                 </button>
             </div>

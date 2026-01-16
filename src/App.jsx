@@ -51,6 +51,30 @@ function App() {
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
+  // Estados para personalización del perfil (localStorage)
+  const [dashboardTitle, setDashboardTitle] = useState('Mi Dashboard FuXion');
+  const [coverPhoto, setCoverPhoto] = useState(null);
+
+  // Cargar perfil de localStorage al inicio
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('fuxionUserProfile');
+    if (savedProfile) {
+      const profile = JSON.parse(savedProfile);
+      setDashboardTitle(profile.dashboardTitle || 'Mi Dashboard FuXion');
+      setCoverPhoto(profile.coverPhoto || null);
+    }
+
+    // Escuchar cambios del perfil
+    const handleProfileUpdate = (e) => {
+      const { dashboardTitle: newTitle, coverPhoto: newCover } = e.detail;
+      if (newTitle) setDashboardTitle(newTitle);
+      if (newCover !== undefined) setCoverPhoto(newCover);
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdate);
+  }, []);
+
   // Verificar si el usuario es admin (RE-ACTIVADO después de optimizar RLS)
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(user);
 
@@ -178,10 +202,39 @@ Ver consola para más detalles (F12)
     }
   };
 
-  // SIMPLIFICADO: SIEMPRE mostrar login (sin usar getSession al inicio)
+  // Verificar si hay sesión guardada al inicio
   useEffect(() => {
-    console.log('[App] 🚀 Iniciando app - Mostrando login directo');
-    setAuthModalOpen(true);
+    console.log('[App] 🚀 Iniciando app...');
+
+    // Verificar si "Mantener sesión" está activo
+    const rememberMe = localStorage.getItem('fuxionRememberMe');
+    const savedUser = localStorage.getItem('fuxionSavedUser');
+
+    if (rememberMe === 'true' && savedUser) {
+      console.log('[App] 🔄 Restaurando sesión guardada...');
+      try {
+        const parsedUser = JSON.parse(savedUser);
+
+        // Cargar perfil actualizado
+        const savedProfile = localStorage.getItem('fuxionUserProfile');
+        if (savedProfile) {
+          const profile = JSON.parse(savedProfile);
+          if (profile.name) parsedUser.name = profile.name;
+          if (profile.avatar) parsedUser.avatar = profile.avatar;
+        }
+
+        setUser(parsedUser);
+        setAuthModalOpen(false);
+        loadUserData(parsedUser.id);
+      } catch (error) {
+        console.error('[App] Error restaurando sesión:', error);
+        setAuthModalOpen(true);
+      }
+    } else {
+      console.log('[App] No hay sesión guardada - Mostrando login');
+      setAuthModalOpen(true);
+    }
+
     setLoading(false);
 
     // Escuchar cambios en la autenticación (solo SIGNED_OUT)
@@ -196,6 +249,9 @@ Ver consola para más detalles (F12)
         setInventoryMap({});
         setCampaigns([]);
         setLoans([]);
+        // Limpiar datos de "recordar sesión"
+        localStorage.removeItem('fuxionRememberMe');
+        localStorage.removeItem('fuxionSavedUser');
         setAuthModalOpen(true);
       }
       // NO manejar SIGNED_IN aquí - lo maneja handleLogin directamente
@@ -551,7 +607,7 @@ Ver consola para más detalles (F12)
       <RadixTooltipProvider delayDuration={200}>
         <>
           <Helmet>
-            <title>Dashboard Financiero Premium</title>
+            <title>{dashboardTitle || 'Mi Dashboard FuXion'}</title>
             <meta name="description" content="Control total de Compras, Ventas, Publicidad y Ganancias." />
           </Helmet>
 
@@ -571,39 +627,58 @@ Ver consola para más detalles (F12)
         )}
 
         {!loading && user && (
-            <div className="max-w-7xl mx-auto px-6 py-8 space-y-10">
+            <div className="max-w-7xl mx-auto space-y-6">
             {console.log('[App] Renderizando dashboard - user:', user?.id, 'transactions:', transactions?.length, 'products:', products?.length, 'prices:', Object.keys(prices || {}).length)}
             {console.log('[App] Renderizando dashboard - user:', user, 'transactions:', transactions.length, 'products:', products.length, 'loading:', loading)}
-            
-            {/* 1. Header Section */}
-            <motion.header 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5"
-            >
-                <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500 to-yellow-700 shadow-lg shadow-yellow-900/20">
-                    <LayoutDashboard className="w-8 h-8 text-white" />
-                    </div>
-                    <h1 className="text-4xl font-extrabold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent tracking-tight">
-                    Dashboard Financiero Premium
-                    </h1>
-                </div>
-                <p className="text-gray-400 text-lg font-medium ml-1">
-                    Control total de Compras, Ventas, Publicidad y Ganancias
-                </p>
-                </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="bg-gray-900/80 backdrop-blur border border-white/10 px-6 py-4 rounded-2xl shadow-2xl hidden md:block">
-                        <span className="text-gray-500 text-xs font-bold uppercase tracking-widest block mb-1">Inventario Total</span>
-                        <div className="text-3xl font-black text-yellow-400 tracking-tight tabular-nums">
-                            {totalInventory} <span className="text-lg text-gray-500 font-medium">unid.</span>
+            {/* Banner de Portada */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6 }}
+                className="relative h-48 md:h-56 rounded-b-3xl overflow-hidden"
+            >
+              {coverPhoto ? (
+                <img src={coverPhoto} alt="Portada" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-r from-yellow-600/30 via-purple-600/20 to-blue-600/30" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/50 to-transparent" />
+
+              {/* Contenido sobre el banner */}
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div className="flex items-end gap-4">
+                    {/* Foto de perfil */}
+                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-gray-950 overflow-hidden bg-gray-800 shadow-xl">
+                      {user.avatar ? (
+                        <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-400">
+                          {(user.name || 'U').charAt(0).toUpperCase()}
                         </div>
+                      )}
                     </div>
-                    
+
+                    {/* Nombre y título */}
+                    <div className="mb-1">
+                      <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+                        {dashboardTitle}
+                      </h1>
+                      <p className="text-gray-400 text-sm font-medium">
+                        Control de Compras, Ventas y Ganancias
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="bg-gray-900/80 backdrop-blur border border-white/10 px-4 py-3 rounded-xl shadow-2xl">
+                      <span className="text-gray-500 text-xs font-bold uppercase tracking-widest block">Inventario</span>
+                      <div className="text-2xl font-black text-yellow-400 tracking-tight tabular-nums">
+                        {totalInventory} <span className="text-sm text-gray-500 font-medium">unid.</span>
+                      </div>
+                    </div>
+
                     <UserProfile
                       user={user}
                       onLogout={handleLogout}
@@ -612,8 +687,12 @@ Ver consola para más detalles (F12)
                       onOpenAdminPanel={() => setShowAdminPanel(true)}
                       onCycleClosed={handleCycleClosed}
                     />
+                  </div>
                 </div>
-            </motion.header>
+              </div>
+            </motion.div>
+
+            <div className="px-6 space-y-10">
 
             {/* 2. KPI Cards Grid */}
             <section>
@@ -806,6 +885,7 @@ Ver consola para más detalles (F12)
                 </Tabs>
             </section>
 
+            </div>
             </div>
         )}
 
