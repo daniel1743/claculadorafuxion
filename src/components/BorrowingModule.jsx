@@ -4,6 +4,9 @@ import { HandCoins, Plus, Tag, Hash, User, Phone, Calendar, FileText, RotateCcw,
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import HelpTooltip from '@/components/HelpTooltip';
+import HelpPanel, { HelpButton } from '@/components/HelpPanel';
+import { borrowingsHelp, borrowingsFieldHelp } from '@/lib/helpContent';
 import {
   getUserBorrowings,
   createBorrowing,
@@ -15,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 
 const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
   const { toast } = useToast();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [borrowings, setBorrowings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -213,15 +217,18 @@ const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
       transition={{ delay: 0.2 }}
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6"
     >
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-cyan-500 rounded-full"></span>
-        Préstamos Recibidos (de Socios)
-        {stats?.pendingCount > 0 && (
-          <span className="ml-auto bg-cyan-600 text-white text-xs px-2 py-1 rounded-full font-bold">
-            {stats.pendingCount} pendientes
-          </span>
-        )}
-      </h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <span className="w-1 h-6 bg-cyan-500 rounded-full"></span>
+          Préstamos Recibidos (de Socios)
+          {stats?.pendingCount > 0 && (
+            <span className="ml-2 bg-cyan-600 text-white text-xs px-2 py-1 rounded-full font-bold">
+              {stats.pendingCount} pendientes
+            </span>
+          )}
+        </h3>
+        <HelpButton onClick={() => setHelpOpen(true)} className="text-xs" />
+      </div>
 
       {/* Estadísticas Rápidas */}
       {stats && (
@@ -244,7 +251,10 @@ const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="space-y-4 mb-6">
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Producto que te prestaron *</label>
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Producto que te prestaron *
+            <HelpTooltip content={borrowingsFieldHelp.product} />
+          </label>
           <ProductAutocomplete
             value={formData.productName}
             onChange={(value) => setFormData({...formData, productName: value})}
@@ -521,6 +531,12 @@ const BorrowingModule = ({ products = [], prices = {}, onUpdate }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <HelpPanel
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        helpContent={borrowingsHelp}
+      />
     </motion.div>
   );
 };

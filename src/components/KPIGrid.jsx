@@ -34,13 +34,13 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
     let totalUnitsAcquired = 0;
 
     const campaigns = {};
-    const products = {};
+    const productMap = {}; // Renombrado para evitar shadowing de la prop 'products'
 
     transactions.forEach(t => {
       // Manejar tipos antiguos y nuevos
       const isPurchase = t.type === 'compra' || t.type === 'purchase';
       const isSale = t.type === 'venta' || t.type === 'sale';
-      const isAd = t.type === 'publicidad';
+      const isAd = t.type === 'publicidad' || t.type === 'advertising';
       
       // Campaign aggregation
       if (isAd) {
@@ -62,8 +62,8 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           
           // Product aggregation for preview
           const productName = t.productName || 'Sin Etiqueta';
-          if (!products[productName]) products[productName] = { name: productName, stock: 0 };
-          products[productName].stock += units;
+          if (!productMap[productName]) productMap[productName] = { name: productName, stock: 0 };
+          productMap[productName].stock += units;
         } else {
           // Para transacciones nuevas (V2)
           const units = t.quantityBoxes || t.quantity || 0;
@@ -76,27 +76,27 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           }
           
           const productName = t.productName || 'Sin Etiqueta';
-          if (!products[productName]) products[productName] = { name: productName, stock: 0 };
-          products[productName].stock += units;
+          if (!productMap[productName]) productMap[productName] = { name: productName, stock: 0 };
+          productMap[productName].stock += units;
         }
-      } 
+      }
       else if (isSale) {
         const amount = t.total || t.totalAmount || 0;
         totalSales += amount;
-        
+
         if (t.campaignName && t.campaignName !== 'Orgánico') {
            if (!campaigns[t.campaignName]) campaigns[t.campaignName] = { name: t.campaignName, cost: 0, revenue: 0 };
            campaigns[t.campaignName].revenue += amount;
         }
-        
+
         // Product stock reduction
         const productName = t.productName || 'Sin Etiqueta';
         const quantity = t.quantityBoxes || t.quantity || 0;
-        if (products[productName]) {
-            products[productName].stock -= quantity;
+        if (productMap[productName]) {
+            productMap[productName].stock -= quantity;
         } else {
-            if (!products[productName]) products[productName] = { name: productName, stock: 0 };
-            products[productName].stock -= quantity;
+            if (!productMap[productName]) productMap[productName] = { name: productName, stock: 0 };
+            productMap[productName].stock -= quantity;
         }
       }
     });
@@ -193,10 +193,17 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }))
         .slice(0, 3);
 
-    const productList = Object.values(products)
-        .sort((a,b) => b.stock - a.stock)
-        .slice(0, 3)
-        .map(p => ({ label: p.name, value: p.stock + ' un.' }));
+    // Para el preview del hover, usar products prop (V2) si existe, sino el productMap calculado
+    const productList = (products && products.length > 0)
+        ? products
+            .filter(p => p.currentStockBoxes > 0)
+            .sort((a, b) => b.currentStockBoxes - a.currentStockBoxes)
+            .slice(0, 3)
+            .map(p => ({ label: p.name, value: p.currentStockBoxes + ' un.' }))
+        : Object.values(productMap)
+            .sort((a, b) => b.stock - a.stock)
+            .slice(0, 3)
+            .map(p => ({ label: p.name, value: p.stock + ' un.' }));
 
     const profitPreview = [
         { label: 'Ingresos', value: formatCLP(totalSales) },
@@ -291,7 +298,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           color="red"
           delay={0.05}
           onClick={() => handleCardClick('purchases', 'Historial de Compras', 'red')}
-          hoverData={[{label: 'Transacciones', value: transactions.filter(t=>t.type==='compra').length}]}
+          hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'compra' || t.type === 'purchase').length}]}
         />
         <MetricCard
           title="Ventas Totales"
@@ -301,7 +308,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           color="green"
           delay={0.1}
           onClick={() => handleCardClick('sales', 'Historial de Ventas', 'green')}
-          hoverData={[{label: 'Transacciones', value: transactions.filter(t=>t.type==='venta').length}]}
+          hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'venta' || t.type === 'sale').length}]}
         />
         <MetricCard
           title="Ganancia Neta"
@@ -388,13 +395,16 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         />
       </div>
 
-      <KPIModal 
-        isOpen={modalOpen} 
-        onClose={() => setModalOpen(false)} 
-        type={selectedKPI.type} 
+      <KPIModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        type={selectedKPI.type}
         title={selectedKPI.title}
         color={selectedKPI.color}
         transactions={transactions}
+        products={products}
+        loans={loans}
+        inventoryMap={inventoryMap}
       />
     </>
   );

@@ -66,47 +66,59 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
     else if (type === 'ads') {
         const campMap = {};
         transactions.forEach(t => {
-            if (t.type === 'publicidad' || t.campaignName) {
+            const isAd = t.type === 'publicidad' || t.type === 'advertising';
+            if (isAd || t.campaignName) {
                 const cName = t.campaignName || 'Orgánico';
                 if (!campMap[cName]) campMap[cName] = { name: cName, investment: 0, sales: 0, revenue: 0, startDate: t.date };
-                
+
                 if (new Date(t.date) < new Date(campMap[cName].startDate)) campMap[cName].startDate = t.date;
 
-                if (t.type === 'publicidad') {
-                    campMap[cName].investment += t.total;
-                } else if (t.type === 'venta' && t.campaignName === cName) {
+                const amount = t.total || t.totalAmount || 0;
+                const isSale = t.type === 'venta' || t.type === 'sale';
+
+                if (isAd) {
+                    campMap[cName].investment += amount;
+                } else if (isSale && t.campaignName === cName) {
                     campMap[cName].sales += 1;
-                    campMap[cName].revenue += t.total;
+                    campMap[cName].revenue += amount;
                 }
             }
         });
         rows = Object.values(campMap).filter(c => c.name !== 'Orgánico');
-        summary = { totalCampaigns: rows.length, totalInv: rows.reduce((a,b)=>a+b.investment,0) };
+        summary = { totalCampaigns: rows.length, totalInv: rows.reduce((a, b) => a + b.investment, 0) };
     }
     else if (type === 'profit') {
         // Monthly breakdown
         const monthMap = {};
         transactions.forEach(t => {
             const d = new Date(t.date);
-            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
             const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-            
+
             if (!monthMap[key]) monthMap[key] = { label, key, income: 0, expense: 0, profit: 0 };
 
-            if (t.type === 'venta') {
-                monthMap[key].income += t.total;
+            const amount = t.total || t.totalAmount || 0;
+            const isSale = t.type === 'venta' || t.type === 'sale';
+
+            if (isSale) {
+                monthMap[key].income += amount;
             } else {
-                monthMap[key].expense += t.total;
+                monthMap[key].expense += amount;
             }
             monthMap[key].profit = monthMap[key].income - monthMap[key].expense;
         });
-        rows = Object.values(monthMap).sort((a,b) => a.key.localeCompare(b.key));
-        summary = { net: rows.reduce((a,b)=>a+b.profit, 0) };
+        rows = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
+        summary = { net: rows.reduce((a, b) => a + b.profit, 0) };
     }
     else if (type === 'purchases' || type === 'sales') {
-        const filterType = type === 'purchases' ? 'compra' : 'venta';
-        rows = transactions.filter(t => t.type === filterType).sort((a,b) => new Date(b.date) - new Date(a.date));
-        summary = { count: rows.length, total: rows.reduce((a,b)=>a+b.total, 0) };
+        // Manejar tipos antiguos y nuevos
+        if (type === 'purchases') {
+            rows = transactions.filter(t => t.type === 'compra' || t.type === 'purchase');
+        } else {
+            rows = transactions.filter(t => t.type === 'venta' || t.type === 'sale');
+        }
+        rows = rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+        summary = { count: rows.length, total: rows.reduce((a, b) => a + (b.total || b.totalAmount || 0), 0) };
     }
     else if (type === 'loans') {
         // Agregar préstamos por producto
@@ -135,7 +147,7 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
     }
 
     return { rows, summary };
-  }, [type, transactions, loans]);
+  }, [type, transactions, loans, products]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

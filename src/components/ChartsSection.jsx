@@ -68,11 +68,15 @@ const ChartsSection = ({ transactions }) => {
     transactions.forEach(t => {
         const name = t.campaignName || 'Orgánico';
         if (!campData[name]) campData[name] = { name, inversion: 0, retorno: 0, roi: 0 };
-        
-        if (t.type === 'publicidad') {
-            campData[name].inversion += t.total;
-        } else if (t.type === 'venta' && t.campaignName) {
-            campData[name].retorno += t.total;
+
+        const isAd = t.type === 'publicidad' || t.type === 'advertising';
+        const isSale = t.type === 'venta' || t.type === 'sale';
+        const amount = t.total || t.totalAmount || 0;
+
+        if (isAd) {
+            campData[name].inversion += amount;
+        } else if (isSale && t.campaignName) {
+            campData[name].retorno += amount;
         }
     });
 
@@ -86,8 +90,11 @@ const ChartsSection = ({ transactions }) => {
     let adsTotal = 0;
     let purchTotal = 0;
     transactions.forEach(t => {
-        if (t.type === 'publicidad') adsTotal += t.total;
-        if (t.type === 'compra') purchTotal += t.total;
+        const isAd = t.type === 'publicidad' || t.type === 'advertising';
+        const isPurchase = t.type === 'compra' || t.type === 'purchase';
+        const amount = t.total || t.totalAmount || 0;
+        if (isAd) adsTotal += amount;
+        if (isPurchase) purchTotal += amount;
     });
     const pieData = [
         { name: 'Publicidad', value: adsTotal },
@@ -96,8 +103,8 @@ const ChartsSection = ({ transactions }) => {
 
     const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const heatData = daysOfWeek.map(d => ({ name: d, count: 0 }));
-    
-    transactions.filter(t => t.type === 'venta').forEach(t => {
+
+    transactions.filter(t => t.type === 'venta' || t.type === 'sale').forEach(t => {
         const d = new Date(t.date).getDay();
         heatData[d].count += 1;
     });

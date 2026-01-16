@@ -160,6 +160,55 @@ export const pricesFieldHelp = {
 };
 
 // ========================================
+// MÓDULO: ABRIR CAJAS (BOX OPENING)
+// ========================================
+export const boxOpeningHelp = {
+  title: "Módulo de Apertura de Cajas",
+  description: "Convierte cajas completas en sobres sueltos para venta individual",
+  whatItDoes: "Cuando abres una caja para vender sobres sueltos, lo registras aquí. El sistema descuenta las cajas de tu inventario y suma los sobres equivalentes.",
+  whyImportant: "Vender sobres sueltos puede darte más ganancia por caja, pero necesitas llevar el control de cuántas cajas abriste y cuántos sobres tienes disponibles.",
+  examples: [
+    "Abro 1 caja de Prunex para vender sobres en un evento → 1 caja = 28 sobres",
+    "Abro 2 cajas para tener stock de sobres para muestra → 2 cajas = 56 sobres",
+    "Necesito sobres para promoción de degustación, abro 1 caja"
+  ],
+  impact: "Al abrir una caja, tu inventario de cajas baja pero tu inventario de sobres sube. No hay gasto de dinero, solo conversión de formato.",
+  warnings: "Una vez abierta una caja, no puedes 'cerrarla' de nuevo. Asegúrate de que realmente necesitas los sobres antes de abrir."
+};
+
+export const boxOpeningFieldHelp = {
+  product: "Producto del cual vas a abrir cajas. Debe tener cajas disponibles en inventario.",
+  quantityBoxes: "Número de cajas que vas a abrir. Cada caja se convierte en el número de sobres definido para ese producto (generalmente 28)."
+};
+
+// ========================================
+// MÓDULO: PRÉSTAMOS RECIBIDOS (BORROWINGS)
+// ========================================
+export const borrowingsHelp = {
+  title: "Módulo de Préstamos Recibidos",
+  description: "Registra productos que pides prestados a otros socios",
+  whatItDoes: "Cuando necesitas producto y no tienes stock, puedes pedirle prestado a un socio. Aquí registras lo que pediste prestado y cuándo debes devolverlo.",
+  whyImportant: "Es importante llevar control de lo que debes a otros socios. Así no olvidas devolver y mantienes buenas relaciones comerciales.",
+  examples: [
+    "Pedí prestadas 3 cajas de Prunex a mi socio Juan para una venta urgente",
+    "Mi compañera María me prestó 5 sobres para completar un pedido",
+    "Necesito devolver 2 cajas a Pedro antes del viernes"
+  ],
+  impact: "Los préstamos recibidos se muestran como deudas pendientes. El sistema te recuerda qué debes devolver y a quién.",
+  warnings: "Devolver a tiempo mantiene la confianza con tus socios. No olvides registrar cuando devuelves para mantener el control actualizado."
+};
+
+export const borrowingsFieldHelp = {
+  product: "Producto que estás pidiendo prestado.",
+  quantityBoxes: "Número de CAJAS que te prestan.",
+  quantitySachets: "Número de SOBRES sueltos que te prestan (si aplica).",
+  partnerName: "Nombre del socio que te presta el producto. Ejemplo: 'Juan Pérez', 'María García'.",
+  partnerPhone: "Teléfono del socio (opcional). Te ayuda a contactarlo cuando debas devolver.",
+  dueDate: "Fecha en que prometiste devolver el producto.",
+  notes: "Opcional. Condiciones del préstamo, acuerdos especiales, etc."
+};
+
+// ========================================
 // TOOLTIPS GENERALES DE NAVEGACIÓN
 // ========================================
 export const navigationHelp = {

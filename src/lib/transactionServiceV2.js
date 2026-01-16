@@ -105,39 +105,52 @@ export const addTransactionV2 = async (transaction) => {
       points = 0,
       customerId = null,
       saleType = null,
-      referrerId = null
+      referrerId = null,
+      // Campos adicionales para publicidad
+      campaignName = null,
+      description = ''
     } = transaction;
 
+    // Usar description como notes si notes está vacío
+    const finalNotes = notes || description || '';
+
     // Validar tipo de transacción
-    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening', 'loan_repayment', 'loan'];
+    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening', 'loan_repayment', 'loan', 'advertising'];
     if (!validTypes.includes(type)) {
       throw new Error(`Tipo de transacción inválido: ${type}. Debe ser uno de: ${validTypes.join(', ')}`);
     }
 
-    // Obtener o crear el producto
-    let productId;
-    const { data: existingProduct, error: productError } = await getProductByName(user.id, productName);
-    
-    if (productError && productError.code !== 'PGRST116') {
-      throw productError;
-    }
+    // Para publicidad, no se requiere producto
+    let productId = null;
 
-    if (existingProduct) {
-      productId = existingProduct.id;
-    } else {
-      // Crear producto si no existe
-      if (!listPrice) {
-        throw new Error(`El producto "${productName}" no existe. Debes proporcionar listPrice para crearlo.`);
+    if (type === 'advertising') {
+      // Advertising no requiere producto
+      productId = null;
+    } else if (productName) {
+      // Obtener o crear el producto
+      const { data: existingProduct, error: productError } = await getProductByName(user.id, productName);
+
+      if (productError && productError.code !== 'PGRST116') {
+        throw productError;
       }
 
-      const { data: newProduct, error: createError } = await upsertProduct({
-        name: productName,
-        list_price: listPrice,
-        points: points
-      });
+      if (existingProduct) {
+        productId = existingProduct.id;
+      } else {
+        // Crear producto si no existe
+        if (!listPrice) {
+          throw new Error(`El producto "${productName}" no existe. Debes proporcionar listPrice para crearlo.`);
+        }
 
-      if (createError) throw createError;
-      productId = newProduct.id;
+        const { data: newProduct, error: createError } = await upsertProduct({
+          name: productName,
+          list_price: listPrice,
+          points: points
+        });
+
+        if (createError) throw createError;
+        productId = newProduct.id;
+      }
     }
 
     // Crear la transacción base
@@ -147,15 +160,16 @@ export const addTransactionV2 = async (transaction) => {
       type: type,
       quantity_boxes: parseInt(quantityBoxes) || 0,
       quantity_sachets: parseInt(quantitySachets) || 0,
-      total_amount: parseFloat(totalAmount),
+      total_amount: parseFloat(totalAmount) || 0,
       unit_cost_snapshot: 0, // Se actualizará automáticamente por el trigger
-      notes: notes.trim()
+      notes: finalNotes.trim()
     };
 
-    // Agregar campos CRM solo si tienen valor (para evitar errores si no existen las columnas)
+    // Agregar campos opcionales solo si tienen valor (para evitar errores si no existen las columnas)
     if (customerId) dbTransaction.customer_id = customerId;
     if (saleType) dbTransaction.sale_type = saleType;
     if (referrerId) dbTransaction.referrer_id = referrerId;
+    if (campaignName) dbTransaction.campaign_name = campaignName;
 
     // Intentar insertar con campos CRM, si falla intentar sin ellos
     let data, error;
@@ -187,10 +201,12 @@ export const addTransactionV2 = async (transaction) => {
         type: type,
         quantity_boxes: parseInt(quantityBoxes) || 0,
         quantity_sachets: parseInt(quantitySachets) || 0,
-        total_amount: parseFloat(totalAmount),
+        total_amount: parseFloat(totalAmount) || 0,
         unit_cost_snapshot: 0,
-        notes: notes.trim()
+        notes: finalNotes.trim()
       };
+      // Agregar campaign_name si existe
+      if (campaignName) basicTransaction.campaign_name = campaignName;
 
       const retryResult = await supabase
         .from('transactions')
@@ -216,13 +232,19 @@ export const addTransactionV2 = async (transaction) => {
       id: data.id,
       type: data.type,
       productId: data.product_id,
-      productName: data.products?.name || productName,
+      productName: data.products?.name || productName || null,
       quantityBoxes: parseInt(data.quantity_boxes) || 0,
       quantitySachets: parseInt(data.quantity_sachets) || 0,
       totalAmount: parseFloat(data.total_amount) || 0,
       unitCostSnapshot: parseFloat(data.unit_cost_snapshot) || 0,
       notes: data.notes || '',
-      date: data.created_at
+      date: data.created_at,
+      // Campos adicionales
+      campaignName: data.campaign_name || campaignName || null,
+      // Compatibilidad con formato antiguo
+      total: parseFloat(data.total_amount) || 0,
+      quantity: parseInt(data.quantity_boxes) || 0,
+      description: data.notes || ''
     };
     
     return { data: mappedData, error: null };

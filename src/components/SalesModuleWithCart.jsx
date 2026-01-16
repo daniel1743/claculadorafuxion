@@ -4,6 +4,9 @@ import { Plus, Tag, Hash, DollarSign, Link2, FileText, ShoppingCart, Trash2, Use
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import HelpTooltip from '@/components/HelpTooltip';
+import HelpPanel, { HelpButton } from '@/components/HelpPanel';
+import { salesHelp, salesFieldHelp } from '@/lib/helpContent';
 import { createLoan } from '@/lib/loanService';
 import { addTransactionV2 } from '@/lib/transactionServiceV2';
 import { getAllCustomers } from '@/lib/customerService';
@@ -12,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 
 const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) => {
   const { toast } = useToast();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
@@ -380,21 +384,27 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
       transition={{ delay: 0.2 }}
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6 h-full flex flex-col"
     >
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <span className="w-1 h-6 bg-green-500 rounded-full"></span>
-        Nueva Venta con Carrito
-        {cart.length > 0 && (
-          <span className="ml-auto bg-green-600 text-white text-xs px-2 py-1 rounded-full font-bold">
-            {cart.length} {cart.length === 1 ? 'producto' : 'productos'}
-          </span>
-        )}
-      </h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <span className="w-1 h-6 bg-green-500 rounded-full"></span>
+          Nueva Venta con Carrito
+          {cart.length > 0 && (
+            <span className="ml-2 bg-green-600 text-white text-xs px-2 py-1 rounded-full font-bold">
+              {cart.length} {cart.length === 1 ? 'producto' : 'productos'}
+            </span>
+          )}
+        </h3>
+        <HelpButton onClick={() => setHelpOpen(true)} className="text-xs" />
+      </div>
 
       <div className="space-y-4 flex-1 overflow-y-auto">
         {/* Formulario de Agregar Producto */}
         <div className="space-y-4 bg-black/20 p-4 rounded-xl border border-white/5">
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Producto *</label>
+            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+              Producto *
+              <HelpTooltip content={salesFieldHelp.product} />
+            </label>
             <ProductAutocomplete
               value={formData.productName}
               onChange={(value) => setFormData({...formData, productName: value})}
@@ -420,7 +430,10 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Cantidad *</label>
+              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+                Cantidad *
+                <HelpTooltip content={salesFieldHelp.quantityBoxes} />
+              </label>
               <div className="relative group">
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
                 <input
@@ -434,7 +447,10 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">Precio Unit. *</label>
+              <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+                Precio Unit. *
+                <HelpTooltip content={salesFieldHelp.totalAmount} />
+              </label>
               <div className="relative group">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
                 <input
@@ -711,6 +727,12 @@ const SalesModuleWithCart = ({ onAdd, inventoryMap, campaigns, prices, products 
           Finalizar Venta {cart.length > 0 && `(${cart.length} productos)`}
         </Button>
       </div>
+
+      <HelpPanel
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        helpContent={salesHelp}
+      />
     </motion.div>
   );
 };

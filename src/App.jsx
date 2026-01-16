@@ -264,7 +264,7 @@ Ver consola para más detalles (F12)
   const extractCampaigns = (txns) => {
     const uniqueCampaigns = [...new Set(
       txns.filter(t => {
-        const isAd = t.type === 'publicidad';
+        const isAd = t.type === 'publicidad' || t.type === 'advertising';
         const isSale = t.type === 'venta' || t.type === 'sale';
         return isAd || (isSale && t.campaignName);
       })
@@ -325,9 +325,12 @@ Ver consola para más detalles (F12)
       }
     } catch (error) {
       console.error('Error agregando transacción:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+
+      const errorMsg = error?.message || error?.details || String(error) || "Error desconocido";
       toast({
-        title: "Error",
-        description: "No se pudo agregar la transacción. Por favor, intenta de nuevo.",
+        title: "Error al Guardar",
+        description: errorMsg,
         variant: "destructive"
       });
     }
@@ -362,7 +365,7 @@ Ver consola para más detalles (F12)
 
     try {
       const { error } = await upsertPrice(product, price);
-      
+
       if (error) {
         console.error('Error de Supabase al guardar precio:', error);
         throw new Error(error.message || 'Error al guardar en la base de datos');
@@ -372,10 +375,26 @@ Ver consola para más detalles (F12)
       const newPrices = { ...prices, [product]: price };
       setPrices(newPrices);
 
-      // Recargar precios desde BD para asegurar consistencia
-      const { data: pricesData, error: reloadError } = await getPrices(user.id);
-      if (!reloadError && pricesData) {
-        setPrices(pricesData);
+      // Recargar precios y productos desde BD para asegurar consistencia
+      const [pricesResult, productsResult] = await Promise.all([
+        getPrices(user.id),
+        getUserProductsWithInventory(user.id)
+      ]);
+
+      if (!pricesResult.error && pricesResult.data) {
+        setPrices(pricesResult.data);
+      }
+
+      if (!productsResult.error && productsResult.data) {
+        setProducts(productsResult.data);
+        // Actualizar precios desde productos
+        const pricesFromProducts = {};
+        productsResult.data.forEach(p => {
+          if (p.listPrice > 0) {
+            pricesFromProducts[p.name] = p.listPrice;
+          }
+        });
+        setPrices(prev => ({ ...prev, ...pricesFromProducts }));
       }
     } catch (error) {
       console.error('Error actualizando precio:', error);
@@ -765,18 +784,20 @@ Ver consola para más detalles (F12)
                     <TabsContent value="precios" className="mt-0 focus-visible:outline-none">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2">
-                                <PriceManagement 
-                                    transactions={transactions} 
-                                    prices={prices} 
-                                    onUpdatePrice={handleUpdatePrice} 
+                                <PriceManagement
+                                    transactions={transactions}
+                                    prices={prices}
+                                    productsV2={products}
+                                    onUpdatePrice={handleUpdatePrice}
                                     onDeleteProduct={handleDeleteProduct}
                                     onRenameProduct={handleRenameProduct}
                                 />
                             </div>
                             <div className="lg:col-span-1">
-                                <BoxOpeningModule 
+                                <BoxOpeningModule
                                     onAdd={handleAddTransaction}
                                     products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
+                                    productsV2={products}
                                 />
                             </div>
                         </div>

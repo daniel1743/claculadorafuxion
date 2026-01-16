@@ -4,42 +4,31 @@ import { Box, Package, Tag, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
+import HelpTooltip from '@/components/HelpTooltip';
+import HelpPanel, { HelpButton } from '@/components/HelpPanel';
+import { boxOpeningHelp, boxOpeningFieldHelp } from '@/lib/helpContent';
 import { addTransactionV2 } from '@/lib/transactionServiceV2';
-import { getUserProductsWithInventory } from '@/lib/productService';
 import { formatInventory } from '@/lib/inventoryUtils';
-import { supabase } from '@/lib/supabase';
 
-const BoxOpeningModule = ({ onAdd, products = [] }) => {
+const BoxOpeningModule = ({ onAdd, products = [], productsV2 = [] }) => {
   const { toast } = useToast();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [formData, setFormData] = useState({
     productName: '',
     quantityBoxes: ''
   });
   const [productInventory, setProductInventory] = useState(null);
-  const [availableProducts, setAvailableProducts] = useState([]);
 
-  // Cargar productos con inventario
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await getUserProductsWithInventory(user.id);
-          if (data) {
-            setAvailableProducts(data);
-          }
-        }
-      } catch (error) {
-        console.error('Error cargando productos:', error);
-      }
-    };
-    loadProducts();
-  }, []);
+  // Usar productsV2 del prop (datos reales de App.jsx)
+  const availableProducts = productsV2;
 
-  // Actualizar inventario cuando cambia el producto
+  // Actualizar inventario cuando cambia el producto seleccionado
   useEffect(() => {
-    if (formData.productName) {
-      const product = availableProducts.find(p => p.name === formData.productName);
+    if (formData.productName && availableProducts.length > 0) {
+      // Buscar case-insensitive
+      const product = availableProducts.find(p =>
+        p.name.toLowerCase() === formData.productName.toLowerCase()
+      );
       setProductInventory(product || null);
     } else {
       setProductInventory(null);
@@ -132,15 +121,19 @@ const BoxOpeningModule = ({ onAdd, products = [] }) => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-gray-900/40 border border-white/5 rounded-2xl p-6"
     >
-      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <Box className="w-5 h-5 text-orange-500" />
-        Abrir Cajas
-      </h3>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <Box className="w-5 h-5 text-orange-500" />
+          Abrir Cajas
+        </h3>
+        <HelpButton onClick={() => setHelpOpen(true)} className="text-xs" />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
             Producto *
+            <HelpTooltip content={boxOpeningFieldHelp.product} />
           </label>
           <ProductAutocomplete
             value={formData.productName}
@@ -157,8 +150,9 @@ const BoxOpeningModule = ({ onAdd, products = [] }) => {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
             Cajas a Abrir *
+            <HelpTooltip content={boxOpeningFieldHelp.quantityBoxes} />
           </label>
           <div className="relative group">
             <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-orange-400 transition-colors" />
@@ -193,7 +187,7 @@ const BoxOpeningModule = ({ onAdd, products = [] }) => {
           </div>
         )}
 
-        <Button 
+        <Button
           type="submit"
           className="w-full h-12 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
@@ -201,6 +195,12 @@ const BoxOpeningModule = ({ onAdd, products = [] }) => {
           Abrir Cajas
         </Button>
       </form>
+
+      <HelpPanel
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        helpContent={boxOpeningHelp}
+      />
     </motion.div>
   );
 };

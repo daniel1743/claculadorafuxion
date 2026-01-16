@@ -18,8 +18,23 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
     });
   };
 
+  // Filtrar por tipo, soportando múltiples tipos equivalentes
   const filteredTransactions = transactions
-    .filter(t => t.type === typeFilter)
+    .filter(t => {
+      // Para publicidad, aceptar tanto 'publicidad' como 'advertising'
+      if (typeFilter === 'publicidad' || typeFilter === 'advertising') {
+        return t.type === 'publicidad' || t.type === 'advertising';
+      }
+      // Para compras, aceptar tanto 'compra' como 'purchase'
+      if (typeFilter === 'compra' || typeFilter === 'purchase') {
+        return t.type === 'compra' || t.type === 'purchase';
+      }
+      // Para ventas, aceptar tanto 'venta' como 'sale'
+      if (typeFilter === 'venta' || typeFilter === 'sale') {
+        return t.type === 'venta' || t.type === 'sale';
+      }
+      return t.type === typeFilter;
+    })
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const colorClasses = {
@@ -77,11 +92,11 @@ const DataTable = ({ transactions, onDelete, typeFilter, title, icon: Icon, colo
                   <span className="block text-gray-600 mt-0.5">{new Date(t.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </td>
                 <td className="px-6 py-4 font-medium text-white">
-                  {t.type === 'publicidad' ? t.campaignName : t.productName}
+                  {(t.type === 'publicidad' || t.type === 'advertising') ? (t.campaignName || 'Campaña sin nombre') : t.productName}
                   <div className="text-[10px] text-gray-500 mt-1 max-w-[200px] truncate">
-                    {t.description}
+                    {t.description || t.notes || ''}
                   </div>
-                  {t.type === 'venta' && t.campaignName && (
+                  {(t.type === 'venta' || t.type === 'sale') && t.campaignName && (
                       <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-900/30 text-blue-300 border border-blue-800/30">
                         {t.campaignName}
                       </span>

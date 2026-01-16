@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import HelpTooltip from '@/components/HelpTooltip';
 import HelpPanel, { HelpButton } from '@/components/HelpPanel';
 import { advertisingHelp, advertisingFieldHelp } from '@/lib/helpContent';
+import { addTransactionV2 } from '@/lib/transactionServiceV2';
 
 const AdModule = ({ onAdd }) => {
   const { toast } = useToast();
@@ -19,7 +20,7 @@ const AdModule = ({ onAdd }) => {
     date: new Date().toISOString().split('T')[0]
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.campaignName || !formData.investment) {
       toast({
@@ -32,56 +33,90 @@ const AdModule = ({ onAdd }) => {
 
     const totalInvestment = parseFloat(formData.investment);
     const tagsList = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
-    let transactionsToAdd = [];
 
-    if (tagsList.length > 0) {
-       const baseInv = totalInvestment / tagsList.length; // Float OK for currency
-       
-       tagsList.forEach(tag => {
-          transactionsToAdd.push({
-             type: 'publicidad',
-             campaignName: formData.campaignName,
-             // Tag becomes part of description or productName context for Ads
-             productName: tag, // Optional: store tag here for consistency
-             description: `${tag} - ${formData.description}`.trim(),
-             total: baseInv,
-             quantity: 1, // Ads don't really have qty but 1 implies "1 ad unit"
-             date: new Date(formData.date).toISOString()
+    try {
+      const results = [];
+      let hasErrors = false;
+
+      if (tagsList.length > 0) {
+        // Dividir inversión entre etiquetas
+        const baseInv = totalInvestment / tagsList.length;
+
+        for (const tag of tagsList) {
+          const result = await addTransactionV2({
+            type: 'advertising',
+            campaignName: formData.campaignName,
+            productName: null, // Publicidad no tiene producto
+            description: `${tag} - ${formData.description}`.trim(),
+            totalAmount: baseInv,
+            quantityBoxes: 0,
+            quantitySachets: 0,
+            notes: `Plataforma: ${tag}`
           });
-       });
-       
-       toast({
-         title: "Campaña Dividida",
-         description: `Inversión dividida entre ${tagsList.length} etiquetas.`,
-         className: "bg-blue-900 border-blue-600 text-white"
-       });
 
-    } else {
-       transactionsToAdd.push({
-          type: 'publicidad',
+          if (result.error) {
+            console.error(`Error registrando ${tag}:`, result.error);
+            hasErrors = true;
+          } else {
+            results.push(result.data);
+          }
+        }
+
+        if (!hasErrors) {
+          toast({
+            title: "Campaña Dividida",
+            description: `Inversión dividida entre ${tagsList.length} etiquetas.`,
+            className: "bg-blue-900 border-blue-600 text-white"
+          });
+        }
+
+      } else {
+        // Campaña única sin etiquetas
+        const result = await addTransactionV2({
+          type: 'advertising',
           campaignName: formData.campaignName,
+          productName: null,
           description: formData.description,
-          total: totalInvestment,
-          quantity: 1,
-          date: new Date(formData.date).toISOString()
-       });
+          totalAmount: totalInvestment,
+          quantityBoxes: 0,
+          quantitySachets: 0,
+          notes: formData.description
+        });
 
-       toast({
-         title: "Campaña Activada",
-         description: "Inversión registrada correctamente.",
-         className: "bg-blue-900 border-blue-600 text-white"
-       });
+        if (result.error) {
+          throw result.error;
+        }
+        results.push(result.data);
+
+        toast({
+          title: "Campaña Activada",
+          description: "Inversión registrada correctamente.",
+          className: "bg-blue-900 border-blue-600 text-white"
+        });
+      }
+
+      // Notificar a App.jsx para recargar datos
+      if (results.length > 0 && onAdd) {
+        await onAdd(results);
+      }
+
+      // Limpiar formulario
+      setFormData({
+        campaignName: '',
+        description: '',
+        tags: '',
+        investment: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+
+    } catch (error) {
+      console.error('Error registrando campaña:', error);
+      toast({
+        title: "Error al Registrar",
+        description: error?.message || "No se pudo registrar la campaña. Intenta de nuevo.",
+        variant: "destructive"
+      });
     }
-
-    onAdd(transactionsToAdd);
-
-    setFormData({
-      campaignName: '',
-      description: '',
-      tags: '',
-      investment: '',
-      date: new Date().toISOString().split('T')[0]
-    });
   };
 
   return (

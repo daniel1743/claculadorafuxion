@@ -122,14 +122,14 @@ export const getTransactions = async (userId) => {
       productName: t.product_name,
       quantity: t.quantity,
       price: t.price,
-      total: parseFloat(t.total) || 0,
+      total: parseFloat(t.total_amount) || 0,
       campaignName: t.campaign_name,
       date: t.date || t.created_at,
       description: t.description || '',
       freeUnits: t.free_units || 0,
       realUnitCost: t.real_unit_cost || 0
     }));
-    
+
     return { data: mappedData, error: null };
   } catch (error) {
     console.error('Error en getTransactions:', error);
@@ -146,19 +146,20 @@ export const addTransaction = async (transaction) => {
     if (!user) throw new Error('Usuario no autenticado');
 
     // Mapear campos del frontend al formato de la BD
+    // NO incluir 'id' - dejar que Supabase genere UUID automáticamente
     const dbTransaction = {
-      id: transaction.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       user_id: user.id,
       type: transaction.type,
-      product_name: transaction.productName,
-      quantity: transaction.quantity,
-      price: transaction.price || (transaction.total && transaction.quantity ? transaction.total / transaction.quantity : null),
-      total: transaction.total,
-      campaign_name: transaction.campaignName,
+      product_name: transaction.productName || null,
+      quantity: transaction.quantity || 1,
+      price: transaction.price || (transaction.total && transaction.quantity ? transaction.total / transaction.quantity : 0),
+      total_amount: transaction.total || 0,
+      campaign_name: transaction.campaignName || null,
       date: transaction.date || new Date().toISOString(),
       description: transaction.description || '',
       free_units: transaction.freeUnits || 0,
-      real_unit_cost: transaction.realUnitCost || 0
+      real_unit_cost: transaction.realUnitCost || 0,
+      unit_cost_snapshot: transaction.realUnitCost || 0
     };
 
     const { data, error } = await supabase
@@ -176,14 +177,14 @@ export const addTransaction = async (transaction) => {
       productName: data.product_name,
       quantity: data.quantity,
       price: data.price,
-      total: parseFloat(data.total) || 0,
+      total: parseFloat(data.total_amount) || 0,
       campaignName: data.campaign_name,
       date: data.date || data.created_at,
       description: data.description || '',
       freeUnits: data.free_units || 0,
       realUnitCost: data.real_unit_cost || 0
     };
-    
+
     return { data: mappedData, error: null };
   } catch (error) {
     console.error('Error en addTransaction:', error);
@@ -200,19 +201,20 @@ export const addMultipleTransactions = async (transactions) => {
     if (!user) throw new Error('Usuario no autenticado');
 
     // Mapear todas las transacciones del frontend al formato de la BD
+    // NO incluir 'id' - dejar que Supabase genere UUID automáticamente
     const dbTransactions = transactions.map(tx => ({
-      id: tx.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       user_id: user.id,
       type: tx.type,
-      product_name: tx.productName,
-      quantity: tx.quantity,
-      price: tx.price || (tx.total && tx.quantity ? tx.total / tx.quantity : null),
-      total: tx.total,
-      campaign_name: tx.campaignName,
+      product_name: tx.productName || null,
+      quantity: tx.quantity || 1,
+      price: tx.price || (tx.total && tx.quantity ? tx.total / tx.quantity : 0),
+      total_amount: tx.total || 0,
+      campaign_name: tx.campaignName || null,
       date: tx.date || new Date().toISOString(),
       description: tx.description || '',
       free_units: tx.freeUnits || 0,
-      real_unit_cost: tx.realUnitCost || 0
+      real_unit_cost: tx.realUnitCost || 0,
+      unit_cost_snapshot: tx.realUnitCost || 0
     }));
 
     const { data, error } = await supabase
@@ -229,14 +231,14 @@ export const addMultipleTransactions = async (transactions) => {
       productName: d.product_name,
       quantity: d.quantity,
       price: d.price,
-      total: parseFloat(d.total) || 0,
+      total: parseFloat(d.total_amount) || 0,
       campaignName: d.campaign_name,
       date: d.date || d.created_at,
       description: d.description || '',
       freeUnits: d.free_units || 0,
       realUnitCost: d.real_unit_cost || 0
     }));
-    
+
     return { data: mappedData, error: null };
   } catch (error) {
     console.error('Error en addMultipleTransactions:', error);
@@ -321,14 +323,14 @@ export const updateTransactionsByProductName = async (oldProductName, newProduct
       productName: d.product_name,
       quantity: d.quantity,
       price: d.price,
-      total: parseFloat(d.total) || 0,
+      total: parseFloat(d.total_amount) || 0,
       campaignName: d.campaign_name,
       date: d.date || d.created_at,
       description: d.description || '',
       freeUnits: d.free_units || 0,
       realUnitCost: d.real_unit_cost || 0
     }));
-    
+
     return { data: mappedData, error: null };
   } catch (error) {
     console.error('Error en updateTransactionsByProductName:', error);
