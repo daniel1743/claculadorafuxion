@@ -140,7 +140,7 @@ export const addTransactionV2 = async (transaction) => {
       productId = newProduct.id;
     }
 
-    // Crear la transacción
+    // Crear la transacción base
     const dbTransaction = {
       user_id: user.id,
       product_id: productId,
@@ -149,13 +149,18 @@ export const addTransactionV2 = async (transaction) => {
       quantity_sachets: parseInt(quantitySachets) || 0,
       total_amount: parseFloat(totalAmount),
       unit_cost_snapshot: 0, // Se actualizará automáticamente por el trigger
-      notes: notes.trim(),
-      customer_id: customerId || null,
-      sale_type: saleType || null,
-      referrer_id: referrerId || null
+      notes: notes.trim()
     };
 
-    const { data, error } = await supabase
+    // Agregar campos CRM solo si tienen valor (para evitar errores si no existen las columnas)
+    if (customerId) dbTransaction.customer_id = customerId;
+    if (saleType) dbTransaction.sale_type = saleType;
+    if (referrerId) dbTransaction.referrer_id = referrerId;
+
+    // Intentar insertar con campos CRM, si falla intentar sin ellos
+    let data, error;
+
+    const insertResult = await supabase
       .from('transactions')
       .insert([dbTransaction])
       .select(`
@@ -167,6 +172,42 @@ export const addTransactionV2 = async (transaction) => {
         )
       `)
       .single();
+
+    data = insertResult.data;
+    error = insertResult.error;
+
+    // Si hay error relacionado con columnas CRM, intentar sin ellas
+    if (error && (error.message?.includes('customer_id') || error.message?.includes('sale_type') || error.message?.includes('referrer_id') || error.code === '42703')) {
+      console.warn('[transactionServiceV2] Campos CRM no disponibles, insertando sin ellos:', error.message);
+
+      // Crear transacción sin campos CRM
+      const basicTransaction = {
+        user_id: user.id,
+        product_id: productId,
+        type: type,
+        quantity_boxes: parseInt(quantityBoxes) || 0,
+        quantity_sachets: parseInt(quantitySachets) || 0,
+        total_amount: parseFloat(totalAmount),
+        unit_cost_snapshot: 0,
+        notes: notes.trim()
+      };
+
+      const retryResult = await supabase
+        .from('transactions')
+        .insert([basicTransaction])
+        .select(`
+          *,
+          products (
+            id,
+            name,
+            weighted_average_cost
+          )
+        `)
+        .single();
+
+      data = retryResult.data;
+      error = retryResult.error;
+    }
 
     if (error) throw error;
 
@@ -186,8 +227,27 @@ export const addTransactionV2 = async (transaction) => {
     
     return { data: mappedData, error: null };
   } catch (error) {
-    console.error('Error en addTransactionV2:', error);
-    return { data: null, error };
+    console.error('Error en addTransactionV2 - COMPLETO:', error);
+    console.error('Error en addTransactionV2 - JSON:', JSON.stringify(error, null, 2));
+    console.error('Error en addTransactionV2 - Props:', {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      name: error?.name,
+      keys: error ? Object.keys(error) : 'N/A'
+    });
+
+    // Normalizar el error para que siempre tenga .message
+    const normalizedError = {
+      message: error?.message || error?.details || String(error) || 'Error desconocido',
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      original: error
+    };
+
+    return { data: null, error: normalizedError };
   }
 };
 

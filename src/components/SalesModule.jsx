@@ -78,10 +78,9 @@ const SalesModule = ({ onAdd, inventoryMap, campaigns, prices, products = [] }) 
         const unitPrice = prices[formData.productName];
         const qty = parseFloat(formData.quantity);
         if (!isNaN(qty) && qty > 0) {
-             // Only update if totalReceived is empty to avoid overwriting user manual input during edits
-             if (!formData.totalReceived) {
-                setFormData(prev => ({...prev, totalReceived: (qty * unitPrice).toString()}));
-             }
+             // Siempre recalcular el total cuando cambia producto o cantidad
+             const calculatedTotal = (qty * unitPrice).toString();
+             setFormData(prev => ({...prev, totalReceived: calculatedTotal}));
         }
     }
   }, [formData.productName, formData.quantity, prices]);

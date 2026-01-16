@@ -58,17 +58,17 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
       const boxes = parseInt(formData.quantityBoxes) || 0;
       const sachets = parseInt(formData.quantitySachets) || 0;
       const product = productInventory;
-      
-      if (product && (boxes > 0 || sachets > 0)) {
+
+      if (boxes > 0 || sachets > 0) {
         // Calcular total: cajas completas + sobres (convertir a equivalente de cajas)
         const boxesValue = boxes * unitPrice;
-        const sachetsEquivalent = sachets / (product.sachetsPerBox || 28);
+        const sachetsPerBox = product?.sachetsPerBox || 28;
+        const sachetsEquivalent = sachets / sachetsPerBox;
         const sachetsValue = sachetsEquivalent * unitPrice;
         const total = boxesValue + sachetsValue;
-        
-        if (!formData.totalAmount || formData.totalAmount === '0') {
-          setFormData(prev => ({ ...prev, totalAmount: total.toFixed(0) }));
-        }
+
+        // Siempre recalcular cuando cambian las cantidades
+        setFormData(prev => ({ ...prev, totalAmount: total.toFixed(0) }));
       }
     }
   }, [exitType, formData.productName, formData.quantityBoxes, formData.quantitySachets, prices, productInventory]);

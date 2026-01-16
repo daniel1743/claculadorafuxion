@@ -12,6 +12,7 @@ import ExitModule from '@/components/ExitModule';
 import BoxOpeningModule from '@/components/BoxOpeningModule';
 import LoanModule from '@/components/LoanModule';
 import LoanRepaymentModule from '@/components/LoanRepaymentModule';
+import BorrowingModule from '@/components/BorrowingModule';
 import PriceManagement from '@/components/PriceManagement';
 import KPIGrid from '@/components/KPIGrid';
 import ChartsSection from '@/components/ChartsSection';
@@ -705,23 +706,50 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="prestamos" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                        <div>
-                            <LoanModule
-                              onAdd={handleAddTransaction}
-                              prices={prices}
-                              products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
-                              inventoryMap={inventoryMap}
-                            />
-                        </div>
-                        <div>
-                            <LoanRepaymentModule
-                              onAdd={handleAddTransaction}
-                              loans={loans}
-                              products={products}
-                            />
-                        </div>
+                    {/* Sección: Préstamos Dados (cuando vendes sin stock) */}
+                    <div className="mb-4">
+                      <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2 mb-4">
+                        <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                        Préstamos Dados (debes devolver producto)
+                      </h2>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                          <div>
+                              <LoanModule
+                                onAdd={handleAddTransaction}
+                                prices={prices}
+                                products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
+                                inventoryMap={inventoryMap}
+                              />
+                          </div>
+                          <div>
+                              <LoanRepaymentModule
+                                onAdd={handleAddTransaction}
+                                loans={loans}
+                                products={products}
+                              />
+                          </div>
+                      </div>
                     </div>
+
+                    {/* Sección: Préstamos Recibidos (de socios) */}
+                    <div className="mb-8">
+                      <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2 mb-4">
+                        <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+                        Préstamos Recibidos (de socios - debes devolverles)
+                      </h2>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          <BorrowingModule
+                            products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
+                            prices={prices}
+                            onUpdate={() => {
+                              // Recargar datos después de actualizar préstamos recibidos
+                              if (user) loadUserData(user.id);
+                            }}
+                          />
+                      </div>
+                    </div>
+
+                    {/* Historial de Préstamos */}
                     <div className="grid grid-cols-1 gap-8">
                         <DataTable
                           typeFilter="loan"
