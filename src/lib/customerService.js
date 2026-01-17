@@ -13,7 +13,7 @@ export const getAllCustomers = async (userId) => {
   try {
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
+      .select('*, referrer:referred_by_client_id ( id, full_name )')
       .eq('user_id', userId)
       .order('full_name', { ascending: true });
 
@@ -42,7 +42,8 @@ export const createCustomer = async (userId, customerData) => {
         email: customerData.email || null,
         rut: customerData.rut || null,
         phone: customerData.phone || null,
-        notes: customerData.notes || null
+        notes: customerData.notes || null,
+        referred_by_client_id: customerData.referred_by_client_id || null
       }])
       .select()
       .single();

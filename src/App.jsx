@@ -983,8 +983,8 @@ Ver consola para más detalles (F12)
             </div>
         )}
 
-        {/* Error Debugger - Siempre activo para detectar problemas */}
-        <ErrorDebugger enabled={true} />
+        {/* Error Debugger - solo en entorno local */}
+        <ErrorDebugger enabled={window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'} />
 
         {/* Modales de Ciclos */}
         {showCyclesHistory && (

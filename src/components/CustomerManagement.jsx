@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Users, Edit2, Trash2, Search, User, Mail, Phone, FileText, X as CloseIcon } from 'lucide-react';
+import { Plus, Users, Edit2, Trash2, Search, User, Mail, Phone, FileText, X as CloseIcon, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { getAllCustomers, createCustomer, updateCustomer, deleteCustomer, searchCustomers } from '@/lib/customerService';
@@ -20,7 +20,8 @@ const CustomerManagement = ({ userId, prices = {}, onTransactionsAdded }) => {
     email: '',
     rut: '',
     phone: '',
-    notes: ''
+    notes: '',
+    referred_by_client_id: null
   });
   const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -155,7 +156,7 @@ const CustomerManagement = ({ userId, prices = {}, onTransactionsAdded }) => {
   };
 
   const handleCancel = () => {
-    setFormData({ full_name: '', email: '', rut: '', phone: '', notes: '' });
+    setFormData({ full_name: '', email: '', rut: '', phone: '', notes: '', referred_by_client_id: null });
     setShowForm(false);
     setEditingCustomer(null);
   };
@@ -285,6 +286,19 @@ const CustomerManagement = ({ userId, prices = {}, onTransactionsAdded }) => {
       </div>
     );
   }
+
+  const openReferralForm = (customer) => {
+    setEditingCustomer(null);
+    setFormData({
+      full_name: '',
+      email: '',
+      rut: '',
+      phone: '',
+      notes: '',
+      referred_by_client_id: customer.id
+    });
+    setShowForm(true);
+  };
 
   return (
     <motion.div
