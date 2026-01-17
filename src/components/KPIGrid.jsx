@@ -1,18 +1,19 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Percent, Wallet, HandHeart, Star } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
 import { calculateTotalProfit } from '@/lib/accountingUtils';
 
-const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [] }) => {
-  console.log('[KPIGrid] Renderizando con:', { 
-    transactions: transactions?.length || 0, 
-    inventory, 
+const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [], fuxionPayments = 0, onEstadoNegocioClick }) => {
+  console.log('[KPIGrid] Renderizando con:', {
+    transactions: transactions?.length || 0,
+    inventory,
     inventoryMapKeys: Object.keys(inventoryMap || {}).length,
     pricesKeys: Object.keys(prices || {}).length,
-    products: products?.length || 0
+    products: products?.length || 0,
+    fuxionPayments
   });
   
   const [modalOpen, setModalOpen] = useState(false);
@@ -127,7 +128,8 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       netProfit = -1 * (totalPurchases + totalAds);
     }
 
-    const avgRealCost = totalUnitsAcquired > 0 ? weightedCostSum / totalUnitsAcquired : 0;
+    // SUMAR PAGOS FUXION a la ganancia neta
+    netProfit += fuxionPayments;
     
     // Calculate Free Product Profit using STORED PRICES
     // First, let's count free products available per product type to be accurate, 
@@ -338,7 +340,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       freeProducts,
       freeProductProfit: freeValueCalc,
       totalInventoryValue,
-      avgRealCost,
+      fuxionPayments,
       bestCampaign,
       campaignList,
       productList,
@@ -349,7 +351,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       totalPoints,
       pointsByProduct
     };
-  }, [transactions, inventoryMap, prices, products, loans]);
+  }, [transactions, inventoryMap, prices, products, loans, fuxionPayments]);
 
   return (
     <>
@@ -393,7 +395,8 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           delay={0.15}
           hoverData={[
             ...metrics.profitPreview,
-            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : [])
+            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : []),
+            ...(metrics.fuxionPayments > 0 ? [{ label: 'Pagos FuXion', value: `+${formatCLP(metrics.fuxionPayments)}` }] : [])
           ]}
           onClick={() => handleCardClick('profit', 'Desglose de Ganancias', 'gold')}
         />
@@ -449,13 +452,14 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
            onClick={() => handleCardClick('inventory', 'Valorización Stock', 'purple')}
         />
         <MetricCard
-          title="Costo Unitario Real"
-          value={formatCLP(metrics.avgRealCost)}
-          icon={Percent}
-          trend="Promedio Ponderado"
-          color="blue"
+          title="Pagos FuXion"
+          value={formatCLP(metrics.fuxionPayments)}
+          icon={Banknote}
+          trend="Cheques y Bonos"
+          color="emerald"
           delay={0.4}
-          onClick={() => handleCardClick('inventory', 'Costos Unitarios', 'blue')}
+          hoverData={metrics.fuxionPayments > 0 ? [{ label: 'Suma a Ganancia Neta', value: 'Sí' }] : []}
+          onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
         />
          <MetricCard
           title="Valor Inventario"
@@ -478,6 +482,20 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
             ...metrics.loansByProduct.slice(0, 3)
           ]}
           onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
+        />
+        <MetricCard
+          title="Estado del Negocio"
+          value="Ver Resumen"
+          icon={FileText}
+          trend="Reporte Ejecutivo"
+          color="yellow"
+          isText
+          delay={0.55}
+          hoverData={[
+            { label: 'Ganancia Neta', value: formatCLP(metrics.netProfit) },
+            { label: 'Valor Inventario', value: formatCLP(metrics.totalInventoryValue) }
+          ]}
+          onClick={onEstadoNegocioClick}
         />
       </div>
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Camera, X, Check, HelpCircle, Shield, Lock, ImagePlus, Pencil } from 'lucide-react';
+import { User, LogOut, Camera, X, Check, HelpCircle, Shield, Lock, ImagePlus, Pencil, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useTooltips } from '@/contexts/TooltipContext';
@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdminPanel, onCycleClosed }) => {
+const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdminPanel, onCycleClosed, onOpenHelpBot }) => {
   const { toast } = useToast();
   const { tooltipsEnabled, toggleTooltips } = useTooltips();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -177,6 +177,10 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
           <DropdownMenuItem onClick={handleToggleTooltips} className="cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:text-white">
             <HelpCircle className="mr-2 h-4 w-4" />
             <span>{tooltipsEnabled ? "Ocultar Ayudas" : "Mostrar Ayudas"}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenHelpBot} className="cursor-pointer text-purple-400 hover:bg-purple-900/20 hover:text-purple-300 focus:bg-purple-900/20 focus:text-purple-300">
+            <Bot className="mr-2 h-4 w-4" />
+            <span>Robot de Ayuda</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/10" />
           <DropdownMenuItem onClick={() => setIsCloseCycleModalOpen(true)} className="cursor-pointer text-yellow-400 hover:bg-yellow-900/20 hover:text-yellow-300 focus:bg-yellow-900/20 focus:text-yellow-300">

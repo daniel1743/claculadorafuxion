@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
@@ -33,12 +33,16 @@ import ErrorDebugger from '@/components/ErrorDebugger';
 import HistoryCard from '@/components/HistoryCard';
 import CustomerManagement from '@/components/CustomerManagement';
 import RemindersCard from '@/components/RemindersCard';
+import FuxionPaymentsModule from '@/components/FuxionPaymentsModule';
+import EstadoDelNegocioModal from '@/components/EstadoDelNegocioModal';
+import HelpBotModal from '@/components/HelpBotModal';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
 import { TooltipProvider as TooltipContextProvider } from '@/contexts/TooltipContext';
 import { TooltipProvider as RadixTooltipProvider } from '@/components/ui/tooltip';
 import { getUserSubscription, checkSubscriptionStatus } from '@/lib/subscriptionService';
+import { getTotalFuxionPayments } from '@/lib/fuxionPaymentsService';
 
 function App() {
   const { toast } = useToast();
@@ -53,11 +57,14 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showCyclesHistory, setShowCyclesHistory] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showEstadoNegocio, setShowEstadoNegocio] = useState(false);
+  const [showHelpBot, setShowHelpBot] = useState(false);
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [debugMinimized, setDebugMinimized] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [totalFuxionPayments, setTotalFuxionPayments] = useState(0);
 
   // Estados para personalización del perfil (localStorage)
   const [dashboardTitle, setDashboardTitle] = useState('Mi Dashboard FuXion');
@@ -132,12 +139,13 @@ Ver consola para más detalles (F12)
       setLoading(true);
 
       // Cargar en PARALELO sin timeouts complicados
-      const [transactionsResult, productsResult, pricesResult, loansResult, subscriptionResult] = await Promise.allSettled([
+      const [transactionsResult, productsResult, pricesResult, loansResult, subscriptionResult, fuxionPaymentsResult] = await Promise.allSettled([
         getTransactionsV2(userId),
         getUserProductsWithInventory(userId),
         getPrices(userId),
         getUserLoans(userId),
-        getUserSubscription(userId)
+        getUserSubscription(userId),
+        getTotalFuxionPayments(userId)
       ]);
 
       // Procesar transacciones
@@ -202,6 +210,15 @@ Ver consola para más detalles (F12)
         console.warn('[App] No se encontró suscripción');
         setSubscription(null);
         setSubscriptionStatus({ status: 'none', daysRemaining: 0, inGracePeriod: false });
+      }
+
+      // Procesar pagos FuXion
+      if (fuxionPaymentsResult.status === 'fulfilled' && fuxionPaymentsResult.value?.data !== undefined) {
+        console.log('[App] Pagos FuXion cargados:', fuxionPaymentsResult.value.data);
+        setTotalFuxionPayments(fuxionPaymentsResult.value.data);
+      } else {
+        console.warn('[App] No se cargaron pagos FuXion');
+        setTotalFuxionPayments(0);
       }
 
       console.log('[App] ✅ loadUserData completado exitosamente');
@@ -790,7 +807,16 @@ Ver consola para más detalles (F12)
 
             {/* 2. KPI Cards Grid */}
             <section>
-                <KPIGrid transactions={transactions} inventory={totalInventory} inventoryMap={inventoryMap} prices={prices} products={products} loans={loans} />
+                <KPIGrid
+                  transactions={transactions}
+                  inventory={totalInventory}
+                  inventoryMap={inventoryMap}
+                  prices={prices}
+                  products={products}
+                  loans={loans}
+                  fuxionPayments={totalFuxionPayments}
+                  onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
+                />
             </section>
 
             {/* 3. Charts Section */}
@@ -838,6 +864,9 @@ Ver consola para más detalles (F12)
                       </TabsTrigger>
                       <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
                           Clientes
+                      </TabsTrigger>
+                      <TabsTrigger value="pagos-fuxion" className="rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Pagos FuXion
                       </TabsTrigger>
                       </TabsList>
                     </div>
@@ -1008,6 +1037,31 @@ Ver consola para más detalles (F12)
                           </ul>
                         </div>
                     </TabsContent>
+
+                    <TabsContent value="pagos-fuxion" className="mt-0 focus-visible:outline-none">
+                        <FuxionPaymentsModule
+                          userId={user?.id}
+                          onPaymentChange={async () => {
+                            // Recargar total de pagos FuXion
+                            if (user) {
+                              const { data } = await getTotalFuxionPayments(user.id);
+                              setTotalFuxionPayments(data || 0);
+                            }
+                          }}
+                        />
+                        <div className="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                          <h4 className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-2">
+                            <Banknote className="w-4 h-4" />
+                            ¿Qué son los Pagos FuXion?
+                          </h4>
+                          <ul className="text-xs text-gray-400 space-y-1">
+                            <li>• <strong>Cheques semanales</strong> - Devolución del % según tu rango (10-50%)</li>
+                            <li>• <strong>Bonos Familia/Fidelización</strong> - Incentivos especiales</li>
+                            <li>• <strong>Comisiones</strong> - Por ventas de tu red</li>
+                            <li>• Estos pagos <strong>suman a tu Ganancia Neta</strong> en el dashboard</li>
+                          </ul>
+                        </div>
+                    </TabsContent>
                 </div>
                 </Tabs>
             </section>
@@ -1037,6 +1091,21 @@ Ver consola para más detalles (F12)
             userId={user.id}
             isOpen={showAnalytics}
             onClose={() => setShowAnalytics(false)}
+          />
+        )}
+
+        {/* Modal Estado del Negocio */}
+        {showEstadoNegocio && user && (
+          <EstadoDelNegocioModal
+            isOpen={showEstadoNegocio}
+            onClose={() => setShowEstadoNegocio(false)}
+            user={user}
+            transactions={transactions}
+            products={products}
+            prices={prices}
+            inventoryMap={inventoryMap}
+            loans={loans}
+            fuxionPayments={totalFuxionPayments}
           />
         )}
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, AlertCircle, PackagePlus, Tag, Hash, DollarSign, FileText, Percent, Truck, Gift, X, ChevronDown } from 'lucide-react';
+import { Plus, AlertCircle, PackagePlus, Tag, Hash, DollarSign, FileText, Truck, Gift, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -15,12 +15,11 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
   const { toast } = useToast();
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Estado principal del formulario
+  // Estado principal del formulario (SIN descuentos - FuXion devuelve después)
   const [formData, setFormData] = useState({
     productName: '',
     quantity: '',
-    description: '',
-    discount: '30' // Descuento por defecto 30%
+    description: ''
   });
   const [cart, setCart] = useState([]);
 
@@ -52,31 +51,25 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     return 0;
   }, [prices]);
 
-  // Cálculos reactivos
+  // Cálculos reactivos (SIN descuentos - pago total real)
   const calculations = useMemo(() => {
     // Si hay items en carrito, calcular con base en ellos
     const baseItems = cart.length > 0 ? cart : [{
       productName: formData.productName,
       quantity: parseInt(formData.quantity) || 0,
-      discountPercent: parseFloat(formData.discount) || 0,
       unitPrice: getProductPrice(formData.productName)
     }];
 
-    let subtotalProductos = 0;
-    let montoDescuento = 0;
+    let totalProductos = 0;
     let totalUnidades = 0;
 
     baseItems.forEach(item => {
-      const sub = item.unitPrice * item.quantity;
-      subtotalProductos += sub;
-      montoDescuento += sub * (item.discountPercent / 100);
+      totalProductos += item.unitPrice * item.quantity;
       totalUnidades += item.quantity;
     });
 
-    const totalProductosNeto = subtotalProductos - montoDescuento;
     const deliveryCost = includeDelivery ? deliveryPrice : 0;
-    const inversionTotal = totalProductosNeto + deliveryCost;
-    const costoUnitarioReal = totalUnidades > 0 ? totalProductosNeto / totalUnidades : 0;
+    const inversionTotal = totalProductos + deliveryCost;
 
     // Calcular valor de regalos
     let valorRegalos = 0;
@@ -94,13 +87,9 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
 
     return {
       unitPrice: getProductPrice(formData.productName),
-      subtotalProductos,
-      discountPercent: cart.length > 0 ? 0 : (parseFloat(formData.discount) || 0),
-      montoDescuento,
-      totalProductosNeto,
+      totalProductos,
       deliveryCost,
       inversionTotal,
-      costoUnitarioReal,
       valorRegalos,
       totalUnidadesRegalos
     };
@@ -110,7 +99,6 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
   const baseItems = cart.length > 0 ? cart : [{
     productName: formData.productName,
     quantity: parseInt(formData.quantity) || 0,
-    discountPercent: parseFloat(formData.discount) || 0,
     unitPrice: getProductPrice(formData.productName)
   }];
 
@@ -158,10 +146,9 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     }
 
     const unitPrice = getProductPrice(formData.productName);
-    const discountPercent = parseFloat(formData.discount) || 0;
 
     // Combinar si ya existe el producto en el carrito
-    const existingIndex = cart.findIndex(item => item.productName === formData.productName && item.discountPercent === discountPercent);
+    const existingIndex = cart.findIndex(item => item.productName === formData.productName);
     if (existingIndex >= 0) {
       const newCart = [...cart];
       newCart[existingIndex] = {
@@ -170,7 +157,7 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
       };
       setCart(newCart);
     } else {
-      setCart([...cart, { productName: formData.productName, quantity: qty, discountPercent, unitPrice }]);
+      setCart([...cart, { productName: formData.productName, quantity: qty, unitPrice }]);
     }
 
     // Reset campos de producto/cantidad para seguir agregando
@@ -195,7 +182,6 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     const workingCart = cart.length > 0 ? cart : [{
       productName: formData.productName,
       quantity: parseInt(formData.quantity) || 0,
-      discountPercent: parseFloat(formData.discount) || 0,
       unitPrice: getProductPrice(formData.productName)
     }];
 
@@ -215,19 +201,17 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
       // Registrar cada item del carrito (uno por producto)
       for (let i = 0; i < workingCart.length; i++) {
         const item = workingCart[i];
-        const subtotal = item.unitPrice * item.quantity;
-        const discountAmount = subtotal * (item.discountPercent / 100);
-        const net = subtotal - discountAmount;
+        const totalItem = item.unitPrice * item.quantity;
         // Delivery se cobra completo y solo una vez (primer item)
-        const netWithDelivery = net + (includeDelivery && i === 0 ? deliveryPrice : 0);
+        const totalWithDelivery = totalItem + (includeDelivery && i === 0 ? deliveryPrice : 0);
 
         const result = await addTransactionV2({
           type: 'purchase',
           productName: item.productName,
           quantityBoxes: item.quantity,
           quantitySachets: 0,
-          totalAmount: netWithDelivery,
-          notes: `Descuento: ${item.discountPercent}%${includeDelivery && i === 0 ? ' | Incluye delivery' : ''}${formData.description ? ` | ${formData.description}` : ''}`.trim(),
+          totalAmount: totalWithDelivery,
+          notes: `${includeDelivery && i === 0 ? 'Incluye delivery | ' : ''}${formData.description || ''}`.trim(),
           listPrice: item.unitPrice
         });
 
@@ -278,7 +262,7 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
         className: "bg-green-900 border-green-600 text-white"
       });
 
-      setFormData({ productName: '', quantity: '', description: '', discount: formData.discount });
+      setFormData({ productName: '', quantity: '', description: '' });
       setGifts([{ productName: '', quantity: '1' }]);
       setIncludeGifts(false);
       setIncludeDelivery(false);
@@ -328,47 +312,26 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
           />
         </div>
 
-        {/* Cantidad y Descuento */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
-              Cantidad *
-              <HelpTooltip content="Número de cajas/unidades compradas" />
-            </label>
-            <div className="relative group">
-              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
-              <input
-                type="number"
-                min="1"
-                value={formData.quantity}
-                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500/50 outline-none transition-all placeholder-gray-700"
-                placeholder="0"
-              />
-            </div>
+        {/* Cantidad */}
+        <div className="space-y-2">
+          <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
+            Cantidad *
+            <HelpTooltip content="Número de cajas/unidades compradas" />
+          </label>
+          <div className="relative group">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
+            <input
+              type="number"
+              min="1"
+              value={formData.quantity}
+              onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+              className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500/50 outline-none transition-all placeholder-gray-700"
+              placeholder="0"
+            />
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1 flex items-center">
-              Tu Descuento
-              <HelpTooltip content="Porcentaje de descuento según tu rango en la empresa" />
-            </label>
-            <div className="relative group">
-              <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-400 transition-colors" />
-              <select
-                value={formData.discount}
-                onChange={(e) => setFormData({...formData, discount: e.target.value})}
-                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500/50 outline-none transition-all appearance-none cursor-pointer"
-              >
-                <option value="0" className="bg-gray-900">0%</option>
-                <option value="10" className="bg-gray-900">10%</option>
-                <option value="20" className="bg-gray-900">20%</option>
-                <option value="30" className="bg-gray-900">30%</option>
-                <option value="40" className="bg-gray-900">40%</option>
-                <option value="50" className="bg-gray-900">50%</option>
-              </select>
-            </div>
-          </div>
+          <p className="text-xs text-gray-500 pl-1">
+            El descuento de FuXion se registra en "Pagos FuXion" cuando llegue el cheque
+          </p>
         </div>
 
         {/* Botón agregar al carrito */}
@@ -390,10 +353,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
               <div key={`${item.productName}-${idx}`} className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-white font-semibold">{item.productName}</p>
-                  <p className="text-xs text-gray-400">Cant: {item.quantity} · Desc: {item.discountPercent}%</p>
+                  <p className="text-xs text-gray-400">Cantidad: {item.quantity}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-white font-mono">{formatCLP(item.unitPrice * item.quantity * (1 - item.discountPercent / 100))}</span>
+                  <span className="text-white font-mono">{formatCLP(item.unitPrice * item.quantity)}</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveCartItem(idx)}
@@ -408,21 +371,11 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
         )}
 
         {/* Resumen de Cálculos */}
-        {calculations.subtotalProductos > 0 && (
+        {calculations.totalProductos > 0 && (
           <div className="bg-red-500/5 rounded-xl p-4 border border-red-500/10 space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-400">Subtotal</span>
-              <span className="text-white font-mono">{formatCLP(calculations.subtotalProductos)}</span>
-            </div>
-            {calculations.montoDescuento > 0 && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-400">{cart.length > 0 ? 'Descuento total' : `Descuento (${formData.discount}% )`}</span>
-                <span className="text-green-400 font-mono">-{formatCLP(calculations.montoDescuento)}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center text-sm border-t border-red-500/10 pt-2">
-              <span className="text-gray-400">Productos con descuento</span>
-              <span className="text-white font-bold font-mono">{formatCLP(calculations.totalProductosNeto)}</span>
+              <span className="text-gray-400">Total Productos</span>
+              <span className="text-white font-bold font-mono">{formatCLP(calculations.totalProductos)}</span>
             </div>
             {includeDelivery && calculations.deliveryCost > 0 && (
               <div className="flex justify-between items-center text-sm">
@@ -434,10 +387,9 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
               <span className="text-red-400 font-semibold">INVERSIÓN TOTAL</span>
               <span className="text-red-400 font-bold font-mono text-lg">{formatCLP(calculations.inversionTotal)}</span>
             </div>
-            <div className="flex justify-between items-center text-xs pt-1">
-              <span className="text-gray-500">Costo unitario real</span>
-              <span className="text-gray-400 font-mono">{formatCLP(calculations.costoUnitarioReal)}/unidad</span>
-            </div>
+            <p className="text-xs text-gray-500 pt-2">
+              FuXion te devolverá el % según tu rango. Regístralo en "Pagos FuXion".
+            </p>
           </div>
         )}
 
