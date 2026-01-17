@@ -117,7 +117,9 @@ Ver consola para más detalles (F12)
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [user, isAdmin, isLoadingAdmin]);
 
-  const totalInventory = Object.values(inventoryMap).reduce((sum, qty) => sum + qty, 0);
+  const totalInventory = (products && products.length > 0)
+    ? products.reduce((sum, p) => sum + (parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0), 0)
+    : Object.values(inventoryMap).reduce((sum, qty) => sum + qty, 0);
 
   // Cargar datos del usuario autenticado - SIMPLIFICADO
   const loadUserData = async (userId) => {
@@ -147,6 +149,13 @@ Ver consola para más detalles (F12)
       if (productsResult.status === 'fulfilled' && productsResult.value?.data) {
         console.log('[App] Productos cargados:', productsResult.value.data.length);
         setProducts(productsResult.value.data);
+        // Actualizar inventario derivado de productos (fuente más confiable)
+        const mapFromProducts = {};
+        productsResult.value.data.forEach(p => {
+          const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+          mapFromProducts[p.name] = stock;
+        });
+        setInventoryMap(mapFromProducts);
 
         // Actualizar precios desde productos
         const pricesFromProducts = {};
@@ -271,11 +280,31 @@ Ver consola para más detalles (F12)
     if (user) {
       const reloadProducts = async () => {
         const { data } = await getUserProductsWithInventory(user.id);
-        if (data) setProducts(data);
+        if (data) {
+          setProducts(data);
+          const mapFromProducts = {};
+          data.forEach(p => {
+            const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+            mapFromProducts[p.name] = stock;
+          });
+          setInventoryMap(mapFromProducts);
+        }
       };
       reloadProducts();
     }
   }, [transactions.length, user]);
+
+  // Sincronizar inventoryMap cuando llegan productos con stock real
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const mapFromProducts = {};
+      products.forEach(p => {
+        const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+        mapFromProducts[p.name] = stock;
+      });
+      setInventoryMap(mapFromProducts);
+    }
+  }, [products]);
 
   const recalculateInventory = (txns) => {
     const map = {};
@@ -923,7 +952,11 @@ Ver consola para más detalles (F12)
                     <TabsContent value="clientes" className="mt-0 focus-visible:outline-none">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div>
-                                <CustomerManagement userId={user?.id} />
+                                <CustomerManagement
+                                  userId={user?.id}
+                                  prices={prices}
+                                  onTransactionsAdded={handleAddTransaction}
+                                />
                             </div>
                             <div>
                                 <RemindersCard userId={user?.id} refreshTrigger={cycleRefreshTrigger} />

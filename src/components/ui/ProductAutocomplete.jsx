@@ -15,7 +15,8 @@ const ProductAutocomplete = ({
   placeholder = "Buscar producto...",
   className = "",
   icon: Icon = Tag,
-  showPriceInInput = false
+  showPriceInInput = false,
+  hideIconWhenFilled = false
 }) => {
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -74,7 +75,9 @@ const ProductAutocomplete = ({
     <div className="relative w-full">
       {/* Input */}
       <div className="relative group">
-        <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
+        <Icon
+          className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors ${hideIconWhenFilled && value ? 'opacity-0' : ''}`}
+        />
         <input
           ref={inputRef}
           type="text"

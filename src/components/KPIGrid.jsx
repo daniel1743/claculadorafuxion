@@ -219,17 +219,12 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }))
         .slice(0, 3);
 
-    // Para el preview del hover, usar products prop (V2) si existe, sino el productMap calculado
-    const productList = (products && products.length > 0)
-        ? products
-            .filter(p => p.currentStockBoxes > 0)
-            .sort((a, b) => b.currentStockBoxes - a.currentStockBoxes)
-            .slice(0, 3)
-            .map(p => ({ label: p.name, value: p.currentStockBoxes + ' un.' }))
-        : Object.values(productMap)
-            .sort((a, b) => b.stock - a.stock)
-            .slice(0, 3)
-            .map(p => ({ label: p.name, value: p.stock + ' un.' }));
+    // Preview de inventario: usar siempre inventoryMap para reflejar el total mostrado
+    const productList = Object.entries(inventoryMap || {})
+      .filter(([, qty]) => (qty || 0) > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, qty]) => ({ label, value: `${qty} un.` }));
 
     const profitPreview = [
         { label: 'Ingresos', value: formatCLP(totalSales) },
