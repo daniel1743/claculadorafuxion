@@ -153,11 +153,14 @@ export const resetUserPassword = async (userId, newPassword = null) => {
       throw new Error('No hay sesión activa');
     }
 
+    // Generar contraseña si no se proporciona
+    const passwordToSet = newPassword || generateSecurePassword();
+
     // Llamar a la Edge Function con el token explícito
     const { data, error } = await supabase.functions.invoke('admin-reset-password', {
       body: {
         userId: userId,
-        newPassword: newPassword || undefined
+        newPassword: passwordToSet
       },
       headers: {
         Authorization: `Bearer ${session.access_token}`
@@ -178,8 +181,8 @@ export const resetUserPassword = async (userId, newPassword = null) => {
 
     return {
       data: {
-        user: data.data.user,
-        password: data.data.password
+        userId: data.userId || userId,
+        password: passwordToSet
       },
       error: null
     };
