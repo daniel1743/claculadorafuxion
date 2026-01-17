@@ -35,8 +35,10 @@ import CustomerManagement from '@/components/CustomerManagement';
 import RemindersCard from '@/components/RemindersCard';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
+import SubscriptionBanner from '@/components/SubscriptionBanner';
 import { TooltipProvider as TooltipContextProvider } from '@/contexts/TooltipContext';
 import { TooltipProvider as RadixTooltipProvider } from '@/components/ui/tooltip';
+import { getUserSubscription, checkSubscriptionStatus } from '@/lib/subscriptionService';
 
 function App() {
   const { toast } = useToast();
@@ -54,6 +56,8 @@ function App() {
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [debugMinimized, setDebugMinimized] = useState(false);
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
 
   // Estados para personalización del perfil (localStorage)
   const [dashboardTitle, setDashboardTitle] = useState('Mi Dashboard FuXion');
@@ -128,11 +132,12 @@ Ver consola para más detalles (F12)
       setLoading(true);
 
       // Cargar en PARALELO sin timeouts complicados
-      const [transactionsResult, productsResult, pricesResult, loansResult] = await Promise.allSettled([
+      const [transactionsResult, productsResult, pricesResult, loansResult, subscriptionResult] = await Promise.allSettled([
         getTransactionsV2(userId),
         getUserProductsWithInventory(userId),
         getPrices(userId),
-        getUserLoans(userId)
+        getUserLoans(userId),
+        getUserSubscription(userId)
       ]);
 
       // Procesar transacciones
@@ -184,6 +189,19 @@ Ver consola para más detalles (F12)
       } else {
         console.warn('[App] No se cargaron préstamos');
         setLoans([]);
+      }
+
+      // Procesar suscripción
+      if (subscriptionResult.status === 'fulfilled' && subscriptionResult.value?.data) {
+        console.log('[App] Suscripción cargada:', subscriptionResult.value.data);
+        setSubscription(subscriptionResult.value.data);
+        const status = checkSubscriptionStatus(subscriptionResult.value.data);
+        setSubscriptionStatus(status);
+        console.log('[App] Estado de suscripción:', status);
+      } else {
+        console.warn('[App] No se encontró suscripción');
+        setSubscription(null);
+        setSubscriptionStatus({ status: 'none', daysRemaining: 0, inGracePeriod: false });
       }
 
       console.log('[App] ✅ loadUserData completado exitosamente');
@@ -642,6 +660,8 @@ Ver consola para más detalles (F12)
       setInventoryMap({});
       setCampaigns([]);
       setLoans([]);
+      setSubscription(null);
+      setSubscriptionStatus(null);
       setAuthModalOpen(true);
     } catch (error) {
       console.error('Error cerrando sesión:', error);
@@ -757,7 +777,16 @@ Ver consola para más detalles (F12)
               </div>
             </motion.div>
 
-            <div className="px-6 space-y-10">
+            <div className="px-3 sm:px-6 space-y-6 sm:space-y-10">
+
+            {/* Banner de Suscripción */}
+            {subscriptionStatus && (
+              <SubscriptionBanner
+                subscriptionStatus={subscriptionStatus.status}
+                daysRemaining={subscriptionStatus.daysRemaining}
+                expiresAt={subscription?.expires_at}
+              />
+            )}
 
             {/* 2. KPI Cards Grid */}
             <section>
@@ -781,39 +810,42 @@ Ver consola para más detalles (F12)
             {/* 5. Input Tabs Section */}
             <section className="bg-gray-900/40 border border-white/5 rounded-3xl p-1 backdrop-blur-sm shadow-2xl overflow-hidden">
                 <Tabs defaultValue="ventas" className="w-full">
-                <div className="px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <h2 className="text-xl font-bold text-gray-200 flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-yellow-500" />
+                <div className="px-4 sm:px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col gap-4">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-200 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                     Gestión de Operaciones
                     </h2>
-                    <TabsList className="bg-black/40 p-1 rounded-xl border border-white/5 flex flex-wrap h-auto">
-                    <TabsTrigger value="compras" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Compras
-                    </TabsTrigger>
-                    <TabsTrigger value="publicidad" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Publicidad
-                    </TabsTrigger>
-                    <TabsTrigger value="ventas" className="rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Ventas
-                    </TabsTrigger>
-                    <TabsTrigger value="salidas" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Salidas
-                    </TabsTrigger>
-                    <TabsTrigger value="prestamos" className="rounded-lg data-[state=active]:bg-orange-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Préstamos
-                    </TabsTrigger>
-                    <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-6 py-2 transition-all">
-                        Precios
-                    </TabsTrigger>
-                    <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-6 py-2 transition-all">
-                        Clientes
-                    </TabsTrigger>
-                    </TabsList>
+                    {/* Contenedor scrollable para tabs en móvil */}
+                    <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent pb-2 -mb-2">
+                      <TabsList className="bg-black/40 p-1 rounded-xl border border-white/5 inline-flex min-w-max">
+                      <TabsTrigger value="compras" className="rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Compras
+                      </TabsTrigger>
+                      <TabsTrigger value="publicidad" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Publicidad
+                      </TabsTrigger>
+                      <TabsTrigger value="ventas" className="rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Ventas
+                      </TabsTrigger>
+                      <TabsTrigger value="salidas" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Salidas
+                      </TabsTrigger>
+                      <TabsTrigger value="prestamos" className="rounded-lg data-[state=active]:bg-orange-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Préstamos
+                      </TabsTrigger>
+                      <TabsTrigger value="precios" className="rounded-lg data-[state=active]:bg-yellow-600 data-[state=active]:text-black data-[state=active]:font-bold text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Precios
+                      </TabsTrigger>
+                      <TabsTrigger value="clientes" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
+                          Clientes
+                      </TabsTrigger>
+                      </TabsList>
+                    </div>
                 </div>
 
-                <div className="p-6 md:p-8 bg-gradient-to-b from-gray-900/0 to-gray-900/20">
+                <div className="p-3 sm:p-6 md:p-8 bg-gradient-to-b from-gray-900/0 to-gray-900/20">
                     <TabsContent value="compras" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <PurchaseModule
                               onAdd={handleAddTransaction}
@@ -828,7 +860,7 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="publicidad" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <AdModule onAdd={handleAddTransaction} />
                         </div>
@@ -839,7 +871,7 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="ventas" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <SalesModule 
                               onAdd={handleAddTransaction} 
@@ -856,7 +888,7 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="salidas" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <ExitModule
                               onAdd={handleAddTransaction}
@@ -878,7 +910,7 @@ Ver consola para más detalles (F12)
                         <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
                         📤 Prestar Producto (te deben devolver)
                       </h2>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-4 sm:mb-8">
                           <div>
                               <LoanModule
                                 onAdd={handleAddTransaction}
@@ -898,12 +930,12 @@ Ver consola para más detalles (F12)
                     </div>
 
                     {/* Sección: Recibir de Socios (ellos te prestan) */}
-                    <div className="mb-8">
+                    <div className="mb-4 sm:mb-8">
                       <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2 mb-4">
                         <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
                         📥 Recibir de Socio (debes devolverles)
                       </h2>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
                           <BorrowingModule
                             products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                             prices={prices}
@@ -916,7 +948,7 @@ Ver consola para más detalles (F12)
                     </div>
 
                     {/* Historial de Préstamos */}
-                    <div className="grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 gap-4 sm:gap-8">
                         <DataTable
                           typeFilter="loan"
                           transactions={transactions}
@@ -929,7 +961,7 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="precios" className="mt-0 focus-visible:outline-none">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                             <div className="lg:col-span-2">
                                 <PriceManagement
                                     transactions={transactions}
@@ -951,7 +983,7 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="clientes" className="mt-0 focus-visible:outline-none">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
                             <div>
                                 <CustomerManagement
                                   userId={user?.id}

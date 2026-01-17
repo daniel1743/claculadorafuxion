@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Mail, User, ArrowRight, ShieldCheck, Loader2, Check } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, ShieldCheck, Loader2, Check, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -18,6 +18,7 @@ const AuthModal = ({ isOpen, onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -208,12 +209,25 @@ const AuthModal = ({ isOpen, onLogin }) => {
                   <div className="relative group">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors" />
                       <input
-                          type="password"
+                          type={showPassword ? "text" : "password"}
                           placeholder="Contraseña"
-                          className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none transition-all placeholder-gray-600 text-sm"
+                          className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-12 py-3 text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none transition-all placeholder-gray-600 text-sm"
                           value={formData.password}
                           onChange={(e) => setFormData({...formData, password: e.target.value})}
                       />
+                      <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-yellow-500 transition-colors focus:outline-none"
+                          tabIndex={-1}
+                          aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      >
+                          {showPassword ? (
+                              <EyeOff className="w-4 h-4" />
+                          ) : (
+                              <Eye className="w-4 h-4" />
+                          )}
+                      </button>
                   </div>
                </div>
 

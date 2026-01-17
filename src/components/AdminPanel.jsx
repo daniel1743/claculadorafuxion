@@ -15,7 +15,12 @@ import {
   RefreshCw,
   TrendingUp,
   BarChart3,
-  X
+  X,
+  Crown,
+  Calendar,
+  Clock,
+  AlertTriangle,
+  Infinity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -32,14 +37,25 @@ import {
   generateSecurePassword,
   generateUniqueEmail
 } from '@/lib/adminService';
+import {
+  SUBSCRIPTION_PLANS,
+  getUserSubscription,
+  assignSubscription,
+  getAllSubscriptions,
+  checkSubscriptionStatus,
+  revokeSubscription,
+  extendSubscription
+} from '@/lib/subscriptionService';
 
 const AdminPanel = ({ currentUser, onClose }) => {
   const { toast } = useToast();
   const [users, setUsers] = useState([]);
   const [userStats, setUserStats] = useState(null);
   const [systemActivity, setSystemActivity] = useState(null);
+  const [subscriptions, setSubscriptions] = useState({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [assigningPlan, setAssigningPlan] = useState(null); // userId being assigned
 
   // Estados para crear usuario
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -69,10 +85,11 @@ const AdminPanel = ({ currentUser, onClose }) => {
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [usersResult, statsResult, activityResult] = await Promise.allSettled([
+      const [usersResult, statsResult, activityResult, subscriptionsResult] = await Promise.allSettled([
         getAllUsers(),
         getUserStats(),
-        getSystemActivity()
+        getSystemActivity(),
+        getAllSubscriptions()
       ]);
 
       if (usersResult.status === 'fulfilled' && usersResult.value.data) {
@@ -86,11 +103,91 @@ const AdminPanel = ({ currentUser, onClose }) => {
       if (activityResult.status === 'fulfilled' && activityResult.value.data) {
         setSystemActivity(activityResult.value.data);
       }
+
+      // Mapear suscripciones por user_id
+      if (subscriptionsResult.status === 'fulfilled' && subscriptionsResult.value.data) {
+        const subsMap = {};
+        subscriptionsResult.value.data.forEach(sub => {
+          subsMap[sub.user_id] = sub;
+        });
+        setSubscriptions(subsMap);
+      }
     } catch (error) {
       console.error('[AdminPanel] Error loading data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Asignar plan a usuario
+  const handleAssignPlan = async (userId, planKey) => {
+    setAssigningPlan(userId);
+    try {
+      const result = await assignSubscription(userId, planKey, currentUser.id);
+
+      if (result.error) throw result.error;
+
+      toast({
+        title: "Plan Asignado",
+        description: `Se asignó el plan ${SUBSCRIPTION_PLANS[planKey].label} correctamente.`,
+        className: "bg-green-900 border-green-600 text-white"
+      });
+
+      // Recargar datos
+      await loadAdminData();
+    } catch (error) {
+      console.error('[AdminPanel] Error assigning plan:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo asignar el plan.",
+        variant: "destructive"
+      });
+    } finally {
+      setAssigningPlan(null);
+    }
+  };
+
+  // Revocar suscripción
+  const handleRevokePlan = async (userId, userEmail) => {
+    if (!confirm(`¿Revocar suscripción de ${userEmail}? El usuario perderá acceso.`)) return;
+
+    try {
+      const result = await revokeSubscription(userId);
+
+      if (result.error) throw result.error;
+
+      toast({
+        title: "Suscripción Revocada",
+        description: `Se eliminó la suscripción de ${userEmail}.`,
+        className: "bg-red-900 border-red-600 text-white"
+      });
+
+      await loadAdminData();
+    } catch (error) {
+      console.error('[AdminPanel] Error revoking subscription:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo revocar la suscripción.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Obtener info de suscripción para mostrar
+  const getSubscriptionInfo = (userId) => {
+    const sub = subscriptions[userId];
+    if (!sub) return { status: 'none', label: 'Sin plan', color: 'gray' };
+
+    const statusInfo = checkSubscriptionStatus(sub);
+    const plan = SUBSCRIPTION_PLANS[sub.plan];
+
+    return {
+      ...statusInfo,
+      plan: sub.plan,
+      planLabel: plan?.label || sub.plan,
+      color: plan?.color || 'gray',
+      expiresAt: sub.expires_at
+    };
   };
 
   const handleCreateUser = async () => {
@@ -350,6 +447,17 @@ const AdminPanel = ({ currentUser, onClose }) => {
             >
               <Users className="w-4 h-4 inline mr-2" />
               Usuarios ({users.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('subscriptions')}
+              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                activeTab === 'subscriptions'
+                  ? 'bg-yellow-600 text-black'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Crown className="w-4 h-4 inline mr-2" />
+              Suscripciones
             </button>
           </div>
         </div>
@@ -682,6 +790,167 @@ const AdminPanel = ({ currentUser, onClose }) => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Subscriptions Tab */}
+        {activeTab === 'subscriptions' && (
+          <div className="bg-gray-900/40 border border-white/5 rounded-2xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Crown className="w-5 h-5 text-yellow-500" />
+              Gestión de Suscripciones
+            </h3>
+
+            {/* Leyenda de planes */}
+            <div className="mb-6 p-4 bg-white/5 rounded-xl">
+              <h4 className="text-sm font-semibold text-gray-400 mb-3">Planes Disponibles:</h4>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => (
+                  <div key={key} className={`px-3 py-1.5 rounded-lg text-xs font-semibold bg-${plan.color}-500/20 text-${plan.color}-400 border border-${plan.color}-500/30`}>
+                    {plan.label} {plan.days ? `(${plan.days} días)` : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {users.map((user) => {
+                const subInfo = getSubscriptionInfo(user.id);
+                const isAssigning = assigningPlan === user.id;
+
+                return (
+                  <div
+                    key={user.id}
+                    className="p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Info del usuario */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h4 className="text-white font-semibold">{user.email}</h4>
+                          {subInfo.status === 'active' && subInfo.plan === 'perpetual' && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-xs font-bold">
+                              <Infinity className="w-3 h-3" /> PERPETUO
+                            </span>
+                          )}
+                          {subInfo.status === 'active' && subInfo.plan !== 'perpetual' && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-xs font-bold">
+                              <CheckCircle className="w-3 h-3" /> {subInfo.planLabel}
+                            </span>
+                          )}
+                          {subInfo.status === 'grace_period' && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 text-xs font-bold animate-pulse">
+                              <AlertTriangle className="w-3 h-3" /> EN GRACIA ({subInfo.daysRemaining}d)
+                            </span>
+                          )}
+                          {subInfo.status === 'expired' && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-xs font-bold">
+                              <XCircle className="w-3 h-3" /> EXPIRADO
+                            </span>
+                          )}
+                          {subInfo.status === 'none' && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-gray-500/20 text-gray-400 text-xs">
+                              Sin plan
+                            </span>
+                          )}
+                        </div>
+
+                        {subInfo.status !== 'none' && subInfo.expiresAt && (
+                          <div className="flex items-center gap-2 text-sm text-gray-400">
+                            <Calendar className="w-4 h-4" />
+                            <span>Expira: {formatDate(subInfo.expiresAt)}</span>
+                            {subInfo.daysRemaining !== Infinity && subInfo.daysRemaining > 0 && (
+                              <span className="text-yellow-400">({subInfo.daysRemaining} días restantes)</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Acciones */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Selector de plan */}
+                        <select
+                          className="bg-black/40 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/50 outline-none cursor-pointer"
+                          defaultValue=""
+                          disabled={isAssigning}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssignPlan(user.id, e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                        >
+                          <option value="" disabled>Asignar plan...</option>
+                          {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => (
+                            <option key={key} value={key}>
+                              {plan.label} {plan.days ? `(${plan.days}d)` : ''}
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Botón revocar */}
+                        {subInfo.status !== 'none' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRevokePlan(user.id, user.email)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                            disabled={isAssigning}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Revocar
+                          </Button>
+                        )}
+
+                        {isAssigning && (
+                          <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Asignando...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Stats de suscripciones */}
+            <div className="mt-6 p-4 bg-yellow-500/5 border border-yellow-500/10 rounded-xl">
+              <h4 className="text-sm font-bold text-yellow-400 mb-3">Resumen de Suscripciones</h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white">
+                    {users.filter(u => getSubscriptionInfo(u.id).status === 'active').length}
+                  </div>
+                  <div className="text-xs text-gray-400">Activas</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-400">
+                    {users.filter(u => getSubscriptionInfo(u.id).status === 'grace_period').length}
+                  </div>
+                  <div className="text-xs text-gray-400">En Gracia</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-400">
+                    {users.filter(u => getSubscriptionInfo(u.id).status === 'expired').length}
+                  </div>
+                  <div className="text-xs text-gray-400">Expiradas</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-400">
+                    {users.filter(u => getSubscriptionInfo(u.id).status === 'none').length}
+                  </div>
+                  <div className="text-xs text-gray-400">Sin Plan</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {users.filter(u => getSubscriptionInfo(u.id).plan === 'perpetual').length}
+                  </div>
+                  <div className="text-xs text-gray-400">Perpetuos</div>
+                </div>
+              </div>
             </div>
           </div>
         )}

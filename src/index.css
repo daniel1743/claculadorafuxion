@@ -5,9 +5,30 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+/* Prevenir overflow horizontal en toda la página */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   @apply bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white antialiased;
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height para móviles */
+}
+
+/* Fix para iOS Safari - evita zoom en inputs */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* Asegurar que el root no desborde */
+#root {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 * {
