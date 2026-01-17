@@ -53,6 +53,7 @@ function App() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [debugMinimized, setDebugMinimized] = useState(false);
 
   // Estados para personalización del perfil (localStorage)
   const [dashboardTitle, setDashboardTitle] = useState('Mi Dashboard FuXion');
@@ -1015,42 +1016,63 @@ Ver consola para más detalles (F12)
           />
         )}
 
-        {/* DEBUG: Botón flotante visible que muestra estado de admin */}
-        {user && (
+        {/* DEBUG: Panel solo visible en desarrollo */}
+        {user && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
           <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-            {/* Indicador de estado */}
-            <div className="bg-gray-900/95 border-2 border-purple-500 rounded-lg p-3 shadow-2xl text-xs">
-              <div className="text-purple-400 font-bold mb-1">🔍 DEBUG ADMIN</div>
-              <div className="text-gray-300">User: {user.email}</div>
-              <div className="text-gray-300">ID: {user.id?.slice(0, 8)}...</div>
-              <div className={`font-bold ${isAdmin ? 'text-green-400' : 'text-red-400'}`}>
-                isAdmin: {isAdmin ? '✅ TRUE' : '❌ FALSE'}
-              </div>
-              <div className="text-gray-400">Loading: {isLoadingAdmin ? '⏳' : '✅'}</div>
-            </div>
-
-            {/* Botón para abrir panel (siempre visible si es admin) */}
-            {isAdmin && (
+            {debugMinimized ? (
+              /* Versión minimizada */
               <Button
-                onClick={() => setShowAdminPanel(true)}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold shadow-2xl"
+                onClick={() => setDebugMinimized(false)}
+                className="bg-purple-600/80 hover:bg-purple-500 text-white text-xs shadow-lg"
+                size="sm"
               >
-                <Shield className="w-4 h-4 mr-2" />
-                ABRIR PANEL ADMIN
+                🔍 DEBUG
               </Button>
-            )}
+            ) : (
+              /* Versión expandida */
+              <>
+                <div className="bg-gray-900/95 border-2 border-purple-500 rounded-lg p-3 shadow-2xl text-xs relative">
+                  {/* Botón minimizar */}
+                  <button
+                    onClick={() => setDebugMinimized(true)}
+                    className="absolute top-1 right-1 text-gray-500 hover:text-white text-lg leading-none"
+                    title="Minimizar"
+                  >
+                    −
+                  </button>
+                  <div className="text-purple-400 font-bold mb-1">🔍 DEBUG ADMIN</div>
+                  <div className="text-gray-300">User: {user.email}</div>
+                  <div className="text-gray-300">ID: {user.id?.slice(0, 8)}...</div>
+                  <div className={`font-bold ${isAdmin ? 'text-green-400' : 'text-red-400'}`}>
+                    isAdmin: {isAdmin ? '✅ TRUE' : '❌ FALSE'}
+                  </div>
+                  <div className="text-gray-400">Loading: {isLoadingAdmin ? '⏳' : '✅'}</div>
+                </div>
 
-            {/* Botón para presionar F12 */}
-            <Button
-              onClick={() => {
-                const event = new KeyboardEvent('keydown', { key: 'F12' });
-                window.dispatchEvent(event);
-              }}
-              variant="outline"
-              className="bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700"
-            >
-              Ver Info Completa
-            </Button>
+                {/* Botón para abrir panel (siempre visible si es admin) */}
+                {isAdmin && (
+                  <Button
+                    onClick={() => setShowAdminPanel(true)}
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold shadow-2xl"
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    ABRIR PANEL ADMIN
+                  </Button>
+                )}
+
+                {/* Botón para presionar F12 */}
+                <Button
+                  onClick={() => {
+                    const event = new KeyboardEvent('keydown', { key: 'F12' });
+                    window.dispatchEvent(event);
+                  }}
+                  variant="outline"
+                  className="bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Ver Info Completa
+                </Button>
+              </>
+            )}
           </div>
         )}
           </div>
