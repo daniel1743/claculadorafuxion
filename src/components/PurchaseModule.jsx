@@ -22,6 +22,7 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     description: '',
     discount: '30' // Descuento por defecto 30%
   });
+  const [cart, setCart] = useState([]);
 
   // Estado para regalos
   const [includeGifts, setIncludeGifts] = useState(false);
@@ -53,27 +54,29 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
 
   // Cálculos reactivos
   const calculations = useMemo(() => {
-    const qty = parseInt(formData.quantity) || 0;
-    const unitPrice = getProductPrice(formData.productName);
-    const discountPercent = parseFloat(formData.discount) || 0;
+    // Si hay items en carrito, calcular con base en ellos
+    const baseItems = cart.length > 0 ? cart : [{
+      productName: formData.productName,
+      quantity: parseInt(formData.quantity) || 0,
+      discountPercent: parseFloat(formData.discount) || 0,
+      unitPrice: getProductPrice(formData.productName)
+    }];
 
-    // Subtotal de productos (sin descuento)
-    const subtotalProductos = qty * unitPrice;
+    let subtotalProductos = 0;
+    let montoDescuento = 0;
+    let totalUnidades = 0;
 
-    // Monto del descuento
-    const montoDescuento = subtotalProductos * (discountPercent / 100);
+    baseItems.forEach(item => {
+      const sub = item.unitPrice * item.quantity;
+      subtotalProductos += sub;
+      montoDescuento += sub * (item.discountPercent / 100);
+      totalUnidades += item.quantity;
+    });
 
-    // Total productos con descuento
     const totalProductosNeto = subtotalProductos - montoDescuento;
-
-    // Costo del delivery
     const deliveryCost = includeDelivery ? deliveryPrice : 0;
-
-    // Inversión total de la compra
     const inversionTotal = totalProductosNeto + deliveryCost;
-
-    // Costo unitario real (solo productos comprados, sin regalos)
-    const costoUnitarioReal = qty > 0 ? totalProductosNeto / qty : 0;
+    const costoUnitarioReal = totalUnidades > 0 ? totalProductosNeto / totalUnidades : 0;
 
     // Calcular valor de regalos
     let valorRegalos = 0;
@@ -90,9 +93,9 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     }
 
     return {
-      unitPrice,
+      unitPrice: getProductPrice(formData.productName),
       subtotalProductos,
-      discountPercent,
+      discountPercent: cart.length > 0 ? 0 : (parseFloat(formData.discount) || 0),
       montoDescuento,
       totalProductosNeto,
       deliveryCost,
@@ -101,7 +104,15 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
       valorRegalos,
       totalUnidadesRegalos
     };
-  }, [formData, includeDelivery, includeGifts, gifts, prices, deliveryPrice]);
+  }, [formData, includeDelivery, includeGifts, gifts, prices, deliveryPrice, cart]);
+
+  // Items base para mostrar y validar (carrito o item actual)
+  const baseItems = cart.length > 0 ? cart : [{
+    productName: formData.productName,
+    quantity: parseInt(formData.quantity) || 0,
+    discountPercent: parseFloat(formData.discount) || 0,
+    unitPrice: getProductPrice(formData.productName)
+  }];
 
   // Agregar nuevo regalo
   const addGift = () => {
@@ -125,24 +136,74 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     setGifts(newGifts);
   };
 
-  // Enviar formulario
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  // Agregar producto al carrito
+  const handleAddToCart = () => {
     if (!formData.productName || !formData.quantity) {
       toast({
-        title: "Campos Incompletos",
+        title: "Completa el producto",
         description: "Selecciona un producto e ingresa la cantidad.",
         variant: "destructive"
       });
       return;
     }
 
-    const qty = parseInt(formData.quantity);
+    const qty = parseInt(formData.quantity) || 0;
     if (qty <= 0) {
       toast({
-        title: "Cantidad Inválida",
+        title: "Cantidad inválida",
         description: "La cantidad debe ser mayor a 0.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const unitPrice = getProductPrice(formData.productName);
+    const discountPercent = parseFloat(formData.discount) || 0;
+
+    // Combinar si ya existe el producto en el carrito
+    const existingIndex = cart.findIndex(item => item.productName === formData.productName && item.discountPercent === discountPercent);
+    if (existingIndex >= 0) {
+      const newCart = [...cart];
+      newCart[existingIndex] = {
+        ...newCart[existingIndex],
+        quantity: newCart[existingIndex].quantity + qty
+      };
+      setCart(newCart);
+    } else {
+      setCart([...cart, { productName: formData.productName, quantity: qty, discountPercent, unitPrice }]);
+    }
+
+    // Reset campos de producto/cantidad para seguir agregando
+    setFormData(prev => ({ ...prev, productName: '', quantity: '' }));
+
+    toast({
+      title: "Producto agregado",
+      description: `${qty} x ${formData.productName} añadido al carrito.`,
+      className: "bg-blue-900 border-blue-600 text-white"
+    });
+  };
+
+  const handleRemoveCartItem = (index) => {
+    setCart(cart.filter((_, i) => i !== index));
+  };
+
+  // Enviar formulario
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Si no hay carrito, creamos uno con el formulario actual
+    const workingCart = cart.length > 0 ? cart : [{
+      productName: formData.productName,
+      quantity: parseInt(formData.quantity) || 0,
+      discountPercent: parseFloat(formData.discount) || 0,
+      unitPrice: getProductPrice(formData.productName)
+    }];
+
+    const invalidItem = workingCart.find(item => !item.productName || !item.quantity || item.quantity <= 0);
+    if (invalidItem) {
+      toast({
+        title: "Campos incompletos",
+        description: "Selecciona un producto y una cantidad válida.",
         variant: "destructive"
       });
       return;
@@ -151,21 +212,30 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     try {
       let transactionsToAdd = [];
 
-      // 1. Registrar compra principal
-      const mainResult = await addTransactionV2({
-        type: 'purchase',
-        productName: formData.productName,
-        quantityBoxes: qty,
-        quantitySachets: 0,
-        totalAmount: calculations.inversionTotal, // Inversión total (productos con descuento + delivery)
-        notes: `Descuento: ${calculations.discountPercent}%${includeDelivery ? ' | Incluye delivery' : ''}${formData.description ? ` | ${formData.description}` : ''}`.trim(),
-        listPrice: calculations.unitPrice
-      });
+      // Registrar cada item del carrito (uno por producto)
+      for (let i = 0; i < workingCart.length; i++) {
+        const item = workingCart[i];
+        const subtotal = item.unitPrice * item.quantity;
+        const discountAmount = subtotal * (item.discountPercent / 100);
+        const net = subtotal - discountAmount;
+        // Delivery se cobra completo y solo una vez (primer item)
+        const netWithDelivery = net + (includeDelivery && i === 0 ? deliveryPrice : 0);
 
-      if (mainResult.error) throw mainResult.error;
-      if (mainResult.data) transactionsToAdd.push(mainResult.data);
+        const result = await addTransactionV2({
+          type: 'purchase',
+          productName: item.productName,
+          quantityBoxes: item.quantity,
+          quantitySachets: 0,
+          totalAmount: netWithDelivery,
+          notes: `Descuento: ${item.discountPercent}%${includeDelivery && i === 0 ? ' | Incluye delivery' : ''}${formData.description ? ` | ${formData.description}` : ''}`.trim(),
+          listPrice: item.unitPrice
+        });
 
-      // 2. Registrar regalos (si hay)
+        if (result.error) throw result.error;
+        if (result.data) transactionsToAdd.push(result.data);
+      }
+
+      // Regalos (si hay)
       if (includeGifts) {
         for (const gift of gifts) {
           if (gift.productName && gift.quantity) {
@@ -178,10 +248,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
                 productName: gift.productName,
                 quantityBoxes: giftQty,
                 quantitySachets: 0,
-                totalAmount: 0, // Regalos NO suman inversión
+                totalAmount: 0,
                 notes: `REGALO - Valor de mercado: ${formatCLP(giftQty * giftPrice)}`,
                 listPrice: giftPrice,
-                isGift: true // Marcador para identificar regalos
+                isGift: true
               });
 
               if (giftResult.error) {
@@ -194,11 +264,10 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
         }
       }
 
-      // Notificar al componente padre
       onAdd(transactionsToAdd);
 
-      // Mensaje de éxito
-      let description = `${qty} unidades de ${formData.productName}. Inversión: ${formatCLP(calculations.inversionTotal)}`;
+      const totalQty = workingCart.reduce((sum, item) => sum + item.quantity, 0);
+      let description = `${totalQty} unidades registradas. Inversión: ${formatCLP(calculations.inversionTotal)}`;
       if (calculations.totalUnidadesRegalos > 0) {
         description += ` | +${calculations.totalUnidadesRegalos} regalos (valor: ${formatCLP(calculations.valorRegalos)})`;
       }
@@ -206,14 +275,14 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
       toast({
         title: "Compra Registrada",
         description,
-        className: "bg-red-900 border-red-600 text-white"
+        className: "bg-green-900 border-green-600 text-white"
       });
 
-      // Reset formulario
       setFormData({ productName: '', quantity: '', description: '', discount: formData.discount });
       setGifts([{ productName: '', quantity: '1' }]);
       setIncludeGifts(false);
       setIncludeDelivery(false);
+      setCart([]);
 
     } catch (error) {
       console.error('Error en handleSubmit:', error);
@@ -291,27 +360,63 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
                 onChange={(e) => setFormData({...formData, discount: e.target.value})}
                 className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500/50 outline-none transition-all appearance-none cursor-pointer"
               >
-                <option value="0" className="bg-gray-900">0% - Sin descuento</option>
-                <option value="10" className="bg-gray-900">10% - Inicio</option>
-                <option value="20" className="bg-gray-900">20% - Bronce</option>
-                <option value="30" className="bg-gray-900">30% - Plata</option>
-                <option value="40" className="bg-gray-900">40% - Oro</option>
-                <option value="50" className="bg-gray-900">50% - Diamante</option>
+                <option value="0" className="bg-gray-900">0%</option>
+                <option value="10" className="bg-gray-900">10%</option>
+                <option value="20" className="bg-gray-900">20%</option>
+                <option value="30" className="bg-gray-900">30%</option>
+                <option value="40" className="bg-gray-900">40%</option>
+                <option value="50" className="bg-gray-900">50%</option>
               </select>
             </div>
           </div>
         </div>
 
+        {/* Botón agregar al carrito */}
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            onClick={handleAddToCart}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar al carrito
+          </Button>
+        </div>
+
+        {/* Lista carrito */}
+        {cart.length > 0 && (
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+            {cart.map((item, idx) => (
+              <div key={`${item.productName}-${idx}`} className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-white font-semibold">{item.productName}</p>
+                  <p className="text-xs text-gray-400">Cant: {item.quantity} · Desc: {item.discountPercent}%</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-white font-mono">{formatCLP(item.unitPrice * item.quantity * (1 - item.discountPercent / 100))}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCartItem(idx)}
+                    className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Resumen de Cálculos */}
         {calculations.subtotalProductos > 0 && (
           <div className="bg-red-500/5 rounded-xl p-4 border border-red-500/10 space-y-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-400">Subtotal ({formData.quantity} × {formatCLP(calculations.unitPrice)})</span>
+              <span className="text-gray-400">Subtotal</span>
               <span className="text-white font-mono">{formatCLP(calculations.subtotalProductos)}</span>
             </div>
             {calculations.montoDescuento > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-400">Descuento ({calculations.discountPercent}%)</span>
+                <span className="text-gray-400">{cart.length > 0 ? 'Descuento total' : `Descuento (${formData.discount}% )`}</span>
                 <span className="text-green-400 font-mono">-{formatCLP(calculations.montoDescuento)}</span>
               </div>
             )}

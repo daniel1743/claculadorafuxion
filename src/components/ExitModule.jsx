@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, DollarSign, FileText, Package, Box, Gift, User } from 'lucide-react';
+import { Plus, Tag, Hash, FileText, Package, Box, Gift, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -11,12 +11,11 @@ import { supabase } from '@/lib/supabase';
 
 const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
   const { toast } = useToast();
-  const [exitType, setExitType] = useState('sale'); // 'sale', 'personal_consumption', 'marketing_sample', 'box_opening'
+  const [exitType, setExitType] = useState('personal_consumption'); // 'personal_consumption', 'marketing_sample', 'box_opening'
   const [formData, setFormData] = useState({
     productName: '',
     quantityBoxes: '',
     quantitySachets: '',
-    totalAmount: '',
     notes: '',
     campaignName: ''
   });
@@ -51,34 +50,11 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
     }
   }, [formData.productName, availableProducts]);
 
-  // Auto-calcular total cuando es venta y tiene precio
-  useEffect(() => {
-    if (exitType === 'sale' && formData.productName && prices[formData.productName]) {
-      const unitPrice = prices[formData.productName];
-      const boxes = parseInt(formData.quantityBoxes) || 0;
-      const sachets = parseInt(formData.quantitySachets) || 0;
-      const product = productInventory;
-
-      if (boxes > 0 || sachets > 0) {
-        // Calcular total: cajas completas + sobres (convertir a equivalente de cajas)
-        const boxesValue = boxes * unitPrice;
-        const sachetsPerBox = product?.sachetsPerBox || 28;
-        const sachetsEquivalent = sachets / sachetsPerBox;
-        const sachetsValue = sachetsEquivalent * unitPrice;
-        const total = boxesValue + sachetsValue;
-
-        // Siempre recalcular cuando cambian las cantidades
-        setFormData(prev => ({ ...prev, totalAmount: total.toFixed(0) }));
-      }
-    }
-  }, [exitType, formData.productName, formData.quantityBoxes, formData.quantitySachets, prices, productInventory]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     const quantityBoxes = parseInt(formData.quantityBoxes) || 0;
     const quantitySachets = parseInt(formData.quantitySachets) || 0;
-    const totalAmount = parseFloat(formData.totalAmount) || 0;
 
     // Validaciones según tipo
     if (!formData.productName) {
@@ -119,15 +95,6 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
       }
     }
 
-    if (exitType === 'sale' && totalAmount <= 0) {
-      toast({
-        title: "Monto Requerido",
-        description: "Debes especificar el monto recibido.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     // Validar stock
     if (productInventory) {
       const validation = validateStock(
@@ -152,15 +119,14 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
         productName: formData.productName,
         quantityBoxes: quantityBoxes,
         quantitySachets: quantitySachets,
-        totalAmount: exitType === 'sale' ? totalAmount : 0,
-        notes: formData.notes || (exitType === 'sale' ? formData.campaignName : ''),
+        totalAmount: 0,
+        notes: formData.notes || '',
         listPrice: prices[formData.productName] || 0
       });
 
       if (result.error) throw result.error;
 
       const typeNames = {
-        sale: 'Venta',
         personal_consumption: 'Consumo Personal',
         marketing_sample: 'Muestra/Regalo',
         box_opening: 'Apertura de Caja'
@@ -168,12 +134,8 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
 
       toast({
         title: `${typeNames[exitType]} Registrada`,
-        description: exitType === 'sale' 
-          ? "Ganancia calculada e inventario descontado."
-          : "Inventario actualizado correctamente.",
-        className: exitType === 'sale' 
-          ? "bg-green-900 border-green-600 text-white"
-          : "bg-blue-900 border-blue-600 text-white"
+        description: "Inventario actualizado correctamente.",
+        className: "bg-blue-900 border-blue-600 text-white"
       });
 
       onAdd([result.data]);
@@ -181,7 +143,6 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
         productName: '',
         quantityBoxes: '',
         quantitySachets: '',
-        totalAmount: '',
         notes: '',
         campaignName: ''
       });
@@ -217,54 +178,42 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
           <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
             Tipo de Transacción *
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setExitType('sale')}
-              className={`p-3 rounded-xl border transition-all ${
-                exitType === 'sale'
-                  ? 'bg-green-600 border-green-500 text-white'
-                  : 'bg-black/20 border-white/10 text-gray-400 hover:border-green-500/50'
-              }`}
-            >
-              <DollarSign className="w-4 h-4 mx-auto mb-1" />
-              <span className="text-xs font-semibold">Venta Cliente</span>
-            </button>
+          <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setExitType('personal_consumption')}
-              className={`p-3 rounded-xl border transition-all ${
+              className={`p-3 rounded-xl border transition-all text-center whitespace-normal leading-tight ${
                 exitType === 'personal_consumption'
                   ? 'bg-purple-600 border-purple-500 text-white'
                   : 'bg-black/20 border-white/10 text-gray-400 hover:border-purple-500/50'
               }`}
             >
               <User className="w-4 h-4 mx-auto mb-1" />
-              <span className="text-xs font-semibold">Consumo Personal</span>
+              <span className="text-[11px] font-semibold block">Consumo Personal</span>
             </button>
             <button
               type="button"
               onClick={() => setExitType('marketing_sample')}
-              className={`p-3 rounded-xl border transition-all ${
+              className={`p-3 rounded-xl border transition-all text-center whitespace-normal leading-tight ${
                 exitType === 'marketing_sample'
                   ? 'bg-yellow-600 border-yellow-500 text-white'
                   : 'bg-black/20 border-white/10 text-gray-400 hover:border-yellow-500/50'
               }`}
             >
               <Gift className="w-4 h-4 mx-auto mb-1" />
-              <span className="text-xs font-semibold">Muestra/Regalo</span>
+              <span className="text-[11px] font-semibold block">Muestra / Regalo</span>
             </button>
             <button
               type="button"
               onClick={() => setExitType('box_opening')}
-              className={`p-3 rounded-xl border transition-all ${
+              className={`p-3 rounded-xl border transition-all text-center whitespace-normal leading-tight ${
                 exitType === 'box_opening'
                   ? 'bg-orange-600 border-orange-500 text-white'
                   : 'bg-black/20 border-white/10 text-gray-400 hover:border-orange-500/50'
               }`}
             >
               <Box className="w-4 h-4 mx-auto mb-1" />
-              <span className="text-xs font-semibold">Abrir Caja</span>
+              <span className="text-[11px] font-semibold block">Abrir caja</span>
             </button>
           </div>
         </div>
@@ -361,49 +310,6 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
                   placeholder="0"
                 />
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Monto Total - Solo para ventas */}
-        {exitType === 'sale' && (
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
-              Total Recibido *
-            </label>
-            <div className="relative group">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={formData.totalAmount}
-                onChange={(e) => setFormData({...formData, totalAmount: e.target.value})}
-                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all placeholder-gray-700"
-                placeholder="0"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Campaña - Solo para ventas */}
-        {exitType === 'sale' && (
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
-              Campaña
-            </label>
-            <div className="relative group">
-              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-green-400 transition-colors" />
-              <select
-                value={formData.campaignName}
-                onChange={(e) => setFormData({...formData, campaignName: e.target.value})}
-                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500/50 outline-none transition-all appearance-none text-sm"
-              >
-                <option value="">Venta Orgánica</option>
-                {campaigns.map((c, i) => (
-                  <option key={i} value={c}>{c}</option>
-                ))}
-              </select>
             </div>
           </div>
         )}

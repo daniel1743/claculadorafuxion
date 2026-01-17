@@ -30,6 +30,13 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
   const [editDashboardTitle, setEditDashboardTitle] = useState('');
   const [previewImage, setPreviewImage] = useState(user?.avatar || null);
   const [previewCover, setPreviewCover] = useState(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [socials, setSocials] = useState({
+    twitter: '',
+    facebook: '',
+    instagram: '',
+    tiktok: ''
+  });
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
@@ -41,6 +48,13 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
       setPreviewImage(profile.avatar || user?.avatar || null);
       setPreviewCover(profile.coverPhoto || null);
       setEditDashboardTitle(profile.dashboardTitle || 'Mi Dashboard FuXion');
+      setEditDescription(profile.description || '');
+      setSocials({
+        twitter: profile.twitter || '',
+        facebook: profile.facebook || '',
+        instagram: profile.instagram || '',
+        tiktok: profile.tiktok || ''
+      });
       if (profile.name) {
         setEditName(profile.name);
       }
@@ -92,7 +106,12 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
       name: editName,
       avatar: previewImage,
       coverPhoto: previewCover,
-      dashboardTitle: editDashboardTitle
+      dashboardTitle: editDashboardTitle,
+      description: editDescription,
+      twitter: socials.twitter,
+      facebook: socials.facebook,
+      instagram: socials.instagram,
+      tiktok: socials.tiktok
     };
 
     // Guardar en localStorage
