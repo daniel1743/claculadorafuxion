@@ -11,17 +11,44 @@ import { supabase } from './supabase';
  */
 export const getAllCustomers = async (userId) => {
   try {
+    // Query simplificado - sin JOIN para evitar errores de schema cache
     const { data, error } = await supabase
       .from('customers')
-      .select('*, referrer:referred_by_client_id ( id, full_name )')
+      .select('*')
       .eq('user_id', userId)
       .order('full_name', { ascending: true });
 
     if (error) throw error;
 
+    // Si hay clientes con referrer, buscar sus nombres
+    if (data && data.length > 0) {
+      const referrerIds = data
+        .map(c => c.referred_by_client_id)
+        .filter(Boolean);
+
+      if (referrerIds.length > 0) {
+        const { data: referrers } = await supabase
+          .from('customers')
+          .select('id, full_name')
+          .in('id', referrerIds);
+
+        // Mapear referrers a los clientes
+        const referrerMap = {};
+        (referrers || []).forEach(r => {
+          referrerMap[r.id] = r;
+        });
+
+        data.forEach(customer => {
+          if (customer.referred_by_client_id) {
+            customer.referrer = referrerMap[customer.referred_by_client_id] || null;
+          }
+        });
+      }
+    }
+
     return { data, error: null };
   } catch (error) {
-    console.error('[customerService] Error getting customers:', error);
+    console.error('[customerService] Error getting customers:', error?.message || error?.code || JSON.stringify(error));
     return { data: null, error };
   }
 };

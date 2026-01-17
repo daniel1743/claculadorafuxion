@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS customers (
   rut VARCHAR(20),
   phone VARCHAR(50),
   notes TEXT,
+  referred_by_client_id UUID REFERENCES customers(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
 CREATE INDEX IF NOT EXISTS idx_customers_rut ON customers(rut);
 CREATE INDEX IF NOT EXISTS idx_customers_full_name ON customers(full_name);
+CREATE INDEX IF NOT EXISTS idx_customers_referrer ON customers(referred_by_client_id);
 
 -- Habilitar RLS
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
@@ -92,10 +94,10 @@ EXECUTE FUNCTION update_customers_updated_at();
 -- AGREGAR CAMPOS A TABLA transactions (si no existen)
 -- =====================================================
 
--- Agregar campos para ventas con cliente
+-- Agregar campos para ventas con cliente y referidos
 DO $$
 BEGIN
-  -- customer_id
+  -- customer_id (cliente que compra)
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'transactions' AND column_name = 'customer_id'
@@ -104,7 +106,16 @@ BEGIN
     CREATE INDEX idx_transactions_customer_id ON transactions(customer_id);
   END IF;
 
-  -- sale_type
+  -- referrer_id (cliente que refirió la venta)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'transactions' AND column_name = 'referrer_id'
+  ) THEN
+    ALTER TABLE transactions ADD COLUMN referrer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
+    CREATE INDEX idx_transactions_referrer_id ON transactions(referrer_id);
+  END IF;
+
+  -- sale_type (tipo de venta: normal, recurring, referral)
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'transactions' AND column_name = 'sale_type'
