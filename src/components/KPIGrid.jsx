@@ -4,7 +4,7 @@ import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, 
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
-import { calculateTotalProfit, calculateInventoryValue } from '@/lib/accountingUtils';
+import { calculateTotalProfit } from '@/lib/accountingUtils';
 
 const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [] }) => {
   console.log('[KPIGrid] Renderizando con:', { 
@@ -51,7 +51,13 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       } 
       else if (isPurchase) {
         const amount = t.total || t.totalAmount || 0;
-        totalPurchases += amount;
+        const notes = t.notes || '';
+        const isGift = (amount === 0 && notes.includes('REGALO')) || t.isGift === true;
+
+        // INVERSIÓN: solo dinero real pagado (excluir regalos)
+        if (!isGift) {
+          totalPurchases += amount;
+        }
         
         // Para transacciones antiguas
         if (t.type === 'compra') {
@@ -123,20 +129,15 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
     // OR if the user provided prices, we use the Weighted Average Price of current inventory?
     // Let's stick to: Total Free Units * Average Stored Price (or Avg Sales Price if no stored price)
     
-    // Calculate total value of current inventory
-    // Si tenemos productos con PPP, usar PPP; si no, usar precios de venta
+    // Valor inventario a precio lista (no PPP, no descuentos)
     let totalInventoryValue = 0;
-    if (products && products.length > 0) {
-      totalInventoryValue = calculateInventoryValue(products);
-    } else {
-      // Fallback: usar precios de venta
-      Object.entries(inventoryMap).forEach(([name, qty]) => {
-        if (qty > 0) {
-          const price = prices[name] || 0;
-          totalInventoryValue += (qty * price);
-        }
-      });
-    }
+    Object.entries(inventoryMap || {}).forEach(([name, qty]) => {
+      const stock = qty || 0;
+      const listPrice = prices?.[name] || 0;
+      if (stock > 0) {
+        totalInventoryValue += stock * listPrice;
+      }
+    });
 
     const totalUnitsSold = transactions.filter(t => t.type === 'venta' || t.type === 'sale').reduce((acc, curr) => acc + (curr.quantityBoxes || curr.quantity || 0), 0);
     const avgSalePrice = totalUnitsSold > 0 ? totalSales / totalUnitsSold : 0;
@@ -317,6 +318,12 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         }
       });
     }
+
+    // Debug opcional para diagnstico de KPI
+    console.log('[KPIGrid] inversionCompras:', totalPurchases);
+    console.log('[KPIGrid] valorInventario:', totalInventoryValue);
+    console.log('[KPIGrid] inventoryMap:', inventoryMap);
+    console.log('[KPIGrid] prices keys:', Object.keys(prices || {}));
 
     return {
       totalAds,
