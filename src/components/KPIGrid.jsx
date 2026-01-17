@@ -119,6 +119,14 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       netProfit = totalSales - (totalPurchases + totalAds);
     }
     
+    // Ajustes ganancia neta para coherencia con gastos y escenarios sin ventas
+    if (products && products.length > 0) {
+      netProfit -= totalAds;
+    }
+    if (totalSales === 0 && (totalPurchases > 0 || totalAds > 0)) {
+      netProfit = -1 * (totalPurchases + totalAds);
+    }
+
     const avgRealCost = totalUnitsAcquired > 0 ? weightedCostSum / totalUnitsAcquired : 0;
     
     // Calculate Free Product Profit using STORED PRICES

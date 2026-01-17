@@ -75,7 +75,7 @@ export const calculateTotalProfit = (transactions, products, startDate = null, e
 
   // Filtrar transacciones de venta
   const sales = transactions.filter(t => {
-    if (t.type !== 'sale') return false;
+    if (t.type !== 'sale' && t.type !== 'venta') return false;
     
     if (startDate || endDate) {
       const tDate = new Date(t.created_at || t.date);
@@ -90,7 +90,7 @@ export const calculateTotalProfit = (transactions, products, startDate = null, e
   sales.forEach(sale => {
     if (sale.product_id && productsMap[sale.product_id]) {
       const product = productsMap[sale.product_id];
-      const revenue = parseFloat(sale.total_amount) || 0;
+      const revenue = parseFloat(sale.total_amount ?? sale.totalAmount) || 0;
       const cogs = calculateCOGS(sale, product);
 
       totalRevenue += revenue;
@@ -180,4 +180,3 @@ export const calculateInventoryValue = (products) => {
 
   return parseFloat(totalValue.toFixed(2));
 };
-
