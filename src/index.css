@@ -33,7 +33,7 @@ input, select, textarea {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(202, 138, 4) rgb(17, 24, 39);
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent; /* Thumb tenue, sin barra amarilla */
 }
 
 *::-webkit-scrollbar {
@@ -42,15 +42,15 @@ input, select, textarea {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgb(17, 24, 39);
+  background: transparent;
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, rgb(202, 138, 4), rgb(161, 98, 7));
+  background: rgba(148, 163, 184, 0.5); /* Gris suave */
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, rgb(217, 119, 6), rgb(180, 83, 9));
+  background: rgba(148, 163, 184, 0.7);
 }
