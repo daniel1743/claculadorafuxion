@@ -1,17 +1,21 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Quote, Sparkles, BookOpen, RefreshCw, Share2, X } from 'lucide-react';
+import { Quote, Sparkles, BookOpen, RefreshCw, Share2, X, Clock } from 'lucide-react';
 import { getFraseDelDia, getSaludoAleatorio, FRASES_DIARIAS } from '@/lib/frasesDiarias';
+import { useToast } from '@/components/ui/use-toast';
 
 /**
  * DailyQuote - Frase motivacional del día
  * Aparece debajo del banner con saludo personalizado
+ * Solo permite cambiar la frase UNA vez al día
  */
 const DailyQuote = ({ userName = 'Emprendedor' }) => {
+  const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(true);
   const [currentQuote, setCurrentQuote] = useState(null);
   const [saludo, setSaludo] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  const [canChange, setCanChange] = useState(true);
 
   // Obtener nombre sin email
   const displayName = useMemo(() => {
@@ -24,15 +28,56 @@ const DailyQuote = ({ userName = 'Emprendedor' }) => {
     return userName.split(' ')[0];
   }, [userName]);
 
-  // Cargar frase del día al montar
+  // Obtener fecha de hoy como string YYYY-MM-DD
+  const getTodayKey = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+
+  // Cargar frase del día y estado de cambio al montar
   useEffect(() => {
+    const todayKey = getTodayKey();
+    const savedData = localStorage.getItem('fuxionDailyQuote');
+
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+
+      // Si es del mismo día, usar la frase guardada
+      if (parsed.date === todayKey) {
+        setCurrentQuote(parsed.quote);
+        setSaludo(getSaludoAleatorio(displayName, parsed.quote.autor, parsed.quote.libro));
+        setCanChange(!parsed.hasChanged); // Si ya cambió, no puede cambiar más
+        return;
+      }
+    }
+
+    // Nuevo día: obtener frase del día y resetear
     const frase = getFraseDelDia();
     setCurrentQuote(frase);
     setSaludo(getSaludoAleatorio(displayName, frase.autor, frase.libro));
+    setCanChange(true);
+
+    // Guardar en localStorage
+    localStorage.setItem('fuxionDailyQuote', JSON.stringify({
+      date: todayKey,
+      quote: frase,
+      hasChanged: false
+    }));
   }, [displayName]);
 
-  // Función para obtener nueva frase aleatoria
+  // Función para obtener nueva frase (solo una vez al día)
   const getNewQuote = () => {
+    if (!canChange) {
+      // Ya usó su cambio del día
+      toast({
+        title: "Ya elegiste tu frase de hoy",
+        description: "Mañana tendrás una nueva frase esperándote. ¡Que esta te acompañe hoy!",
+        className: "bg-purple-900/90 border-purple-500/50 text-white",
+        duration: 4000
+      });
+      return;
+    }
+
     setIsAnimating(true);
     setTimeout(() => {
       const randomIndex = Math.floor(Math.random() * FRASES_DIARIAS.length);
@@ -40,6 +85,22 @@ const DailyQuote = ({ userName = 'Emprendedor' }) => {
       setCurrentQuote(newQuote);
       setSaludo(getSaludoAleatorio(displayName, newQuote.autor, newQuote.libro));
       setIsAnimating(false);
+      setCanChange(false); // Ya no puede cambiar más hoy
+
+      // Guardar en localStorage
+      const todayKey = getTodayKey();
+      localStorage.setItem('fuxionDailyQuote', JSON.stringify({
+        date: todayKey,
+        quote: newQuote,
+        hasChanged: true
+      }));
+
+      toast({
+        title: "Nueva frase seleccionada",
+        description: "Esta será tu frase del día. ¡Aprovéchala!",
+        className: "bg-yellow-900/90 border-yellow-500/50 text-white",
+        duration: 3000
+      });
     }, 300);
   };
 
@@ -149,10 +210,23 @@ const DailyQuote = ({ userName = 'Emprendedor' }) => {
             <button
               onClick={getNewQuote}
               disabled={isAnimating}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-yellow-500/30 text-gray-300 hover:text-white text-sm font-medium transition-all disabled:opacity-50"
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-50 ${
+                canChange
+                  ? 'bg-white/5 hover:bg-white/10 border-white/10 hover:border-yellow-500/30 text-gray-300 hover:text-white'
+                  : 'bg-gray-800/50 border-gray-700/50 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              <RefreshCw className={`w-4 h-4 ${isAnimating ? 'animate-spin' : ''}`} />
-              Nueva frase
+              {canChange ? (
+                <>
+                  <RefreshCw className={`w-4 h-4 ${isAnimating ? 'animate-spin' : ''}`} />
+                  Cambiar frase
+                </>
+              ) : (
+                <>
+                  <Clock className="w-4 h-4" />
+                  Mañana habrá más
+                </>
+              )}
             </button>
             <button
               onClick={shareQuote}
