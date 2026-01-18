@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
@@ -18,6 +19,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
   
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedKPI, setSelectedKPI] = useState({ type: '', title: '', color: '' });
+  const [showAllCards, setShowAllCards] = useState(false);
 
   const handleCardClick = (type, title, color) => {
     setSelectedKPI({ type, title, color });
@@ -355,17 +357,25 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+      {/* === TARJETAS PRINCIPALES (siempre visibles) === */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* 1. Ganancia Neta - LA MÁS IMPORTANTE */}
         <MetricCard
-          title="Gasto Publicidad"
-          value={formatCLP(metrics.totalAds)}
-          icon={Megaphone}
-          trend="Inversión Total"
-          color="red"
+          title="Ganancia Neta"
+          value={formatCLP(metrics.netProfit)}
+          icon={TrendingUp}
+          trend={metrics.netProfit >= 0 ? "Rentabilidad Positiva" : "Rentabilidad Negativa"}
+          color={metrics.netProfit >= 0 ? "gold" : "red"}
           delay={0}
-          hoverData={metrics.campaignList}
-          onClick={() => handleCardClick('ads', 'Análisis de Campañas', 'red')}
+          hoverData={[
+            ...metrics.profitPreview,
+            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : []),
+            ...(metrics.fuxionPayments > 0 ? [{ label: 'Pagos FuXion', value: `+${formatCLP(metrics.fuxionPayments)}` }] : [])
+          ]}
+          onClick={() => handleCardClick('profit', 'Desglose de Ganancias', 'gold')}
         />
+
+        {/* 2. Inversión Compras */}
         <MetricCard
           title="Inversión Compras"
           value={formatCLP(metrics.totalPurchases)}
@@ -376,6 +386,8 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           onClick={() => handleCardClick('purchases', 'Historial de Compras', 'red')}
           hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'compra' || t.type === 'purchase').length}]}
         />
+
+        {/* 3. Ventas Totales */}
         <MetricCard
           title="Ventas Totales"
           value={formatCLP(metrics.totalSales)}
@@ -386,118 +398,157 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
           onClick={() => handleCardClick('sales', 'Historial de Ventas', 'green')}
           hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'venta' || t.type === 'sale').length}]}
         />
-        <MetricCard
-          title="Ganancia Neta"
-          value={formatCLP(metrics.netProfit)}
-          icon={TrendingUp}
-          trend={metrics.netProfit >= 0 ? "Rentabilidad Positiva" : "Rentabilidad Negativa"}
-          color={metrics.netProfit >= 0 ? "gold" : "red"}
-          delay={0.15}
-          hoverData={[
-            ...metrics.profitPreview,
-            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : []),
-            ...(metrics.fuxionPayments > 0 ? [{ label: 'Pagos FuXion', value: `+${formatCLP(metrics.fuxionPayments)}` }] : [])
-          ]}
-          onClick={() => handleCardClick('profit', 'Desglose de Ganancias', 'gold')}
-        />
-         <MetricCard
-          title="Inventario Disponible"
-          value={inventory}
-          icon={Package}
-          trend="Stock Actual"
-          color="blue"
-          delay={0.2}
-          hoverData={metrics.productList}
-          onClick={() => handleCardClick('inventory', 'Inventario Detallado', 'blue')}
-        />
-        
-        <MetricCard
-          title="Mejor Campaña (ROI)"
-          value={metrics.bestCampaign}
-          icon={Target}
-          trend="Top Performer"
-          color="gold"
-          isText
-          delay={0.25}
-          onClick={() => handleCardClick('ads', 'Rendimiento de Campañas', 'gold')}
-        />
-        {/* COMENTADO: Tarjeta Producción Gratuita
-        <MetricCard
-          title="Prod. Gratis (4x1)"
-          value={metrics.freeProducts}
-          icon={Gift}
-          trend="Unidades Bonificadas"
-          color="purple"
-          delay={0.3}
-          onClick={() => handleCardClick('inventory', 'Bonificaciones', 'purple')}
-        />
-        */}
-        <MetricCard
-          title="Puntos Acumulados"
-          value={metrics.totalPoints.toLocaleString()}
-          icon={Star}
-          trend="Puntos FuXion"
-          color="purple"
-          delay={0.3}
-          hoverData={metrics.pointsByProduct.slice(0, 3)}
-          onClick={() => handleCardClick('inventory', 'Puntos por Producto', 'purple')}
-        />
-        <MetricCard
-          title="Valor Prod. Gratis"
-          value={formatCLP(metrics.freeProductProfit)}
-          icon={Gift}
-          trend="Ganancia Estimada"
-          color="purple"
-          delay={0.35}
-           onClick={() => handleCardClick('inventory', 'Valorización Stock', 'purple')}
-        />
-        <MetricCard
-          title="Pagos FuXion"
-          value={formatCLP(metrics.fuxionPayments)}
-          icon={Banknote}
-          trend="Cheques y Bonos"
-          color="emerald"
-          delay={0.4}
-          hoverData={metrics.fuxionPayments > 0 ? [{ label: 'Suma a Ganancia Neta', value: 'Sí' }] : []}
-          onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
-        />
-         <MetricCard
-          title="Valor Inventario"
-          value={formatCLP(metrics.totalInventoryValue)}
-          icon={Wallet}
-          trend="Precio de Venta"
-          color="green"
-          delay={0.45}
-          onClick={() => handleCardClick('inventory', 'Valorización', 'green')}
-        />
-        <MetricCard
-          title="Préstamos Activos"
-          value={metrics.totalLoanedBoxes}
-          icon={HandHeart}
-          trend="Unidades Prestadas"
-          color="orange"
-          delay={0.5}
-          hoverData={[
-            ...(metrics.totalLoanedValue > 0 ? [{ label: 'Valor Estimado', value: formatCLP(metrics.totalLoanedValue) }] : []),
-            ...metrics.loansByProduct.slice(0, 3)
-          ]}
-          onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
-        />
-        <MetricCard
-          title="Estado del Negocio"
-          value="Ver Resumen"
-          icon={FileText}
-          trend="Reporte Ejecutivo"
-          color="yellow"
-          isText
-          delay={0.55}
-          hoverData={[
-            { label: 'Ganancia Neta', value: formatCLP(metrics.netProfit) },
-            { label: 'Valor Inventario', value: formatCLP(metrics.totalInventoryValue) }
-          ]}
-          onClick={onEstadoNegocioClick}
-        />
+
+        {/* 4. Botón Ver Más Métricas */}
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          onClick={() => setShowAllCards(!showAllCards)}
+          className={`
+            relative overflow-hidden rounded-2xl p-5
+            border transition-all duration-300 cursor-pointer
+            ${showAllCards
+              ? 'bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/40 shadow-lg shadow-yellow-500/10'
+              : 'bg-gray-900/60 border-white/10 hover:border-yellow-500/30 hover:bg-gray-900/80'
+            }
+          `}
+        >
+          <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-3">
+            <div className={`
+              p-3 rounded-xl transition-colors duration-300
+              ${showAllCards ? 'bg-yellow-500/20' : 'bg-white/5'}
+            `}>
+              <LayoutGrid className={`w-6 h-6 ${showAllCards ? 'text-yellow-400' : 'text-gray-400'}`} />
+            </div>
+            <div className="text-center">
+              <p className={`font-bold ${showAllCards ? 'text-yellow-400' : 'text-gray-300'}`}>
+                {showAllCards ? 'Ocultar Métricas' : 'Ver Todas las Métricas'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {showAllCards ? 'Mostrar solo principales' : '+9 indicadores disponibles'}
+              </p>
+            </div>
+            <motion.div
+              animate={{ rotate: showAllCards ? 180 : 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ChevronDown className={`w-5 h-5 ${showAllCards ? 'text-yellow-400' : 'text-gray-500'}`} />
+            </motion.div>
+          </div>
+        </motion.button>
       </div>
+
+      {/* === TARJETAS EXPANDIBLES (solo cuando showAllCards es true) === */}
+      <AnimatePresence>
+        {showAllCards && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.4, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mt-5 pt-5 border-t border-white/5">
+              <MetricCard
+                title="Gasto Publicidad"
+                value={formatCLP(metrics.totalAds)}
+                icon={Megaphone}
+                trend="Inversión Total"
+                color="red"
+                delay={0}
+                hoverData={metrics.campaignList}
+                onClick={() => handleCardClick('ads', 'Análisis de Campañas', 'red')}
+              />
+              <MetricCard
+                title="Inventario Disponible"
+                value={inventory}
+                icon={Package}
+                trend="Stock Actual"
+                color="blue"
+                delay={0.05}
+                hoverData={metrics.productList}
+                onClick={() => handleCardClick('inventory', 'Inventario Detallado', 'blue')}
+              />
+              <MetricCard
+                title="Valor Inventario"
+                value={formatCLP(metrics.totalInventoryValue)}
+                icon={Wallet}
+                trend="Precio de Venta"
+                color="green"
+                delay={0.1}
+                onClick={() => handleCardClick('inventory', 'Valorización', 'green')}
+              />
+              <MetricCard
+                title="Pagos FuXion"
+                value={formatCLP(metrics.fuxionPayments)}
+                icon={Banknote}
+                trend="Cheques y Bonos"
+                color="emerald"
+                delay={0.15}
+                hoverData={metrics.fuxionPayments > 0 ? [{ label: 'Suma a Ganancia Neta', value: 'Sí' }] : []}
+                onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
+              />
+              <MetricCard
+                title="Mejor Campaña (ROI)"
+                value={metrics.bestCampaign}
+                icon={Target}
+                trend="Top Performer"
+                color="gold"
+                isText
+                delay={0.2}
+                onClick={() => handleCardClick('ads', 'Rendimiento de Campañas', 'gold')}
+              />
+              <MetricCard
+                title="Puntos Acumulados"
+                value={metrics.totalPoints.toLocaleString()}
+                icon={Star}
+                trend="Puntos FuXion"
+                color="purple"
+                delay={0.25}
+                hoverData={metrics.pointsByProduct.slice(0, 3)}
+                onClick={() => handleCardClick('inventory', 'Puntos por Producto', 'purple')}
+              />
+              <MetricCard
+                title="Valor Prod. Gratis"
+                value={formatCLP(metrics.freeProductProfit)}
+                icon={Gift}
+                trend="Ganancia Estimada"
+                color="purple"
+                delay={0.3}
+                onClick={() => handleCardClick('inventory', 'Valorización Stock', 'purple')}
+              />
+              <MetricCard
+                title="Préstamos Activos"
+                value={metrics.totalLoanedBoxes}
+                icon={HandHeart}
+                trend="Unidades Prestadas"
+                color="orange"
+                delay={0.35}
+                hoverData={[
+                  ...(metrics.totalLoanedValue > 0 ? [{ label: 'Valor Estimado', value: formatCLP(metrics.totalLoanedValue) }] : []),
+                  ...metrics.loansByProduct.slice(0, 3)
+                ]}
+                onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
+              />
+              <MetricCard
+                title="Estado del Negocio"
+                value="Ver Resumen"
+                icon={FileText}
+                trend="Reporte Ejecutivo"
+                color="yellow"
+                isText
+                delay={0.4}
+                hoverData={[
+                  { label: 'Ganancia Neta', value: formatCLP(metrics.netProfit) },
+                  { label: 'Valor Inventario', value: formatCLP(metrics.totalInventoryValue) }
+                ]}
+                onClick={onEstadoNegocioClick}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <KPIModal
         isOpen={modalOpen}

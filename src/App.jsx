@@ -36,6 +36,8 @@ import RemindersCard from '@/components/RemindersCard';
 import FuxionPaymentsModule from '@/components/FuxionPaymentsModule';
 import EstadoDelNegocioModal from '@/components/EstadoDelNegocioModal';
 import HelpBotModal from '@/components/HelpBotModal';
+import HeroKpiCarousel from '@/components/HeroKpiCarousel';
+import DailyQuote from '@/components/DailyQuote';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
@@ -795,6 +797,11 @@ Ver consola para más detalles (F12)
               </div>
             </motion.div>
 
+            {/* Frase del Día */}
+            <div className="px-3 sm:px-6 mt-4">
+              <DailyQuote userName={user?.name || user?.email} />
+            </div>
+
             <div className="px-3 sm:px-6 space-y-6 sm:space-y-10">
 
             {/* Banner de Suscripción */}
@@ -806,35 +813,21 @@ Ver consola para más detalles (F12)
               />
             )}
 
-            {/* 2. KPI Cards Grid */}
+            {/* Hero KPI Carousel (Netflix Style) - COMENTADO: información redundante con KPIGrid
             <section>
-                <KPIGrid
-                  transactions={transactions}
-                  inventory={totalInventory}
-                  inventoryMap={inventoryMap}
-                  prices={prices}
-                  products={products}
-                  loans={loans}
-                  fuxionPayments={totalFuxionPayments}
-                  onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
-                />
+              <HeroKpiCarousel
+                transactions={transactions}
+                products={products}
+                prices={prices}
+                inventoryMap={inventoryMap}
+                loans={loans}
+                fuxionPayments={totalFuxionPayments}
+                onOpenEstadoNegocio={() => setShowEstadoNegocio(true)}
+              />
             </section>
+            */}
 
-            {/* 3. Charts Section */}
-            <section>
-                <ChartsSection transactions={transactions} />
-            </section>
-
-            {/* 4. Historial de Ciclos */}
-            <section>
-                <HistoryCard
-                    userId={user.id}
-                    onViewAll={() => setShowCyclesHistory(true)}
-                    refreshTrigger={cycleRefreshTrigger}
-                />
-            </section>
-
-            {/* 5. Input Tabs Section */}
+            {/* 1. Gestión de Operaciones */}
             <section className="bg-gray-900/40 border border-white/5 rounded-3xl p-1 backdrop-blur-sm shadow-2xl overflow-hidden">
                 <Tabs defaultValue="ventas" className="w-full">
                 <div className="px-4 sm:px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col gap-4">
@@ -1065,6 +1058,34 @@ Ver consola para más detalles (F12)
                     </TabsContent>
                 </div>
                 </Tabs>
+            </section>
+
+            {/* 2. KPI Cards Grid */}
+            <section>
+                <KPIGrid
+                  transactions={transactions}
+                  inventory={totalInventory}
+                  inventoryMap={inventoryMap}
+                  prices={prices}
+                  products={products}
+                  loans={loans}
+                  fuxionPayments={totalFuxionPayments}
+                  onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
+                />
+            </section>
+
+            {/* 3. Charts Section */}
+            <section>
+                <ChartsSection transactions={transactions} />
+            </section>
+
+            {/* 4. Historial de Ciclos */}
+            <section>
+                <HistoryCard
+                    userId={user.id}
+                    onViewAll={() => setShowCyclesHistory(true)}
+                    refreshTrigger={cycleRefreshTrigger}
+                />
             </section>
 
             </div>

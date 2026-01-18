@@ -142,6 +142,11 @@ export const buildBusinessSummary = ({
     ? `Ya tienes ${formatCLP(fuxionPayments)} registrados en Pagos FuXion. Esto ya mejora tu balance actual y la proyección final.`
     : `Este cálculo no incluye cheques/ingresos de FuXion. Cuando los registres, tu balance mejorará automáticamente.`;
 
+  // Balance formateado con signo (para párrafo)
+  const balanceTodayWithSign = balanceTodayWithFuxion >= 0
+    ? `+${formatCLP(balanceTodayWithFuxion)}`
+    : `-${formatCLP(Math.abs(balanceTodayWithFuxion))}`;
+
   // ═══════════════════════════════════════════════════════════════
   // 5. RETORNAR OBJETO COMPLETO
   // ═══════════════════════════════════════════════════════════════
