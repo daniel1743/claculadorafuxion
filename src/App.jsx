@@ -885,7 +885,21 @@ Ver consola para más detalles (F12)
             </section>
             */}
 
-            {/* 1. Gestión de Operaciones */}
+            {/* 1. KPI Cards Grid - PRIMERO: Resumen de métricas */}
+            <section>
+                <KPIGrid
+                  transactions={transactions}
+                  inventory={totalInventory}
+                  inventoryMap={inventoryMap}
+                  prices={prices}
+                  products={products}
+                  loans={loans}
+                  fuxionPayments={totalFuxionPayments}
+                  onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
+                />
+            </section>
+
+            {/* 2. Gestión de Operaciones */}
             <section className="bg-gray-900/40 border border-white/5 rounded-3xl p-1 backdrop-blur-sm shadow-2xl overflow-hidden">
                 <Tabs defaultValue="ventas" className="w-full">
                 <div className="px-4 sm:px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col gap-4">
@@ -1118,21 +1132,7 @@ Ver consola para más detalles (F12)
                 </Tabs>
             </section>
 
-            {/* 2. KPI Cards Grid */}
-            <section>
-                <KPIGrid
-                  transactions={transactions}
-                  inventory={totalInventory}
-                  inventoryMap={inventoryMap}
-                  prices={prices}
-                  products={products}
-                  loans={loans}
-                  fuxionPayments={totalFuxionPayments}
-                  onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
-                />
-            </section>
-
-            {/* 3. Charts Section */}
+            {/* 3. Charts Section - Dashboard de gráficos */}
             <section>
                 <ChartsSection transactions={transactions} />
             </section>
