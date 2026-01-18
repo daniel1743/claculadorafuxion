@@ -38,6 +38,9 @@ import EstadoDelNegocioModal from '@/components/EstadoDelNegocioModal';
 import HelpBotModal from '@/components/HelpBotModal';
 import HeroKpiCarousel from '@/components/HeroKpiCarousel';
 import DailyQuote from '@/components/DailyQuote';
+import NotificationBell from '@/components/NotificationBell';
+import SuggestionForm from '@/components/SuggestionForm';
+import { createWelcomeNotification } from '@/lib/notificationService';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
@@ -61,6 +64,7 @@ function App() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showEstadoNegocio, setShowEstadoNegocio] = useState(false);
   const [showHelpBot, setShowHelpBot] = useState(false);
+  const [showSuggestionForm, setShowSuggestionForm] = useState(false);
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [debugMinimized, setDebugMinimized] = useState(false);
@@ -667,6 +671,23 @@ Ver consola para más detalles (F12)
       console.log('[App] 📦 Cargando datos en background...');
       await loadUserData(userData.id);
       console.log('[App] ✅ Datos cargados');
+
+      // Verificar si es la primera vez del usuario para enviar bienvenida
+      const welcomeKey = `fuxion_welcome_sent_${userData.id}`;
+      const welcomeAlreadySent = localStorage.getItem(welcomeKey);
+
+      if (!welcomeAlreadySent) {
+        console.log('[App] 🎊 Primera vez del usuario - Enviando bienvenida...');
+        try {
+          const userName = userData.name || userData.email?.split('@')[0] || 'Emprendedor';
+          await createWelcomeNotification(userData.id, userName);
+          localStorage.setItem(welcomeKey, 'true');
+          console.log('[App] ✅ Notificación de bienvenida enviada');
+        } catch (error) {
+          console.error('[App] ⚠️ Error enviando bienvenida:', error);
+          // No bloquear si falla, es solo una notificación
+        }
+      }
     }, 100);
   };
 
@@ -749,50 +770,46 @@ Ver consola para más detalles (F12)
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/50 to-transparent" />
 
-              {/* Contenido sobre el banner */}
+              {/* Iconos arriba a la derecha */}
+              <div className="absolute top-3 left-0 right-0 px-3 flex justify-end z-10">
+                <div className="flex items-center gap-2 bg-gray-900/70 border border-white/10 rounded-xl px-3 py-2 shadow-lg backdrop-blur max-w-fit">
+                  <NotificationBell userId={user?.id} />
+                  <UserProfile
+                    user={user}
+                    onLogout={handleLogout}
+                    onUpdateUser={setUser}
+                    isAdmin={isAdmin}
+                    useHamburgerTrigger
+                    onOpenAdminPanel={() => setShowAdminPanel(true)}
+                    onCycleClosed={handleCycleClosed}
+                    onOpenHelpBot={() => setShowHelpBot(true)}
+                    onOpenSuggestionForm={() => setShowSuggestionForm(true)}
+                  />
+                </div>
+              </div>
+
+              {/* Avatar centrado verticalmente a la izquierda */}
+              <div className="absolute left-6 top-1/2 -translate-y-1/2 z-10">
+                <div className="w-20 h-20 md:w-28 md:h-28 rounded-full ring-4 ring-gray-950 border border-white/10 overflow-hidden bg-gray-800 shadow-2xl">
+                  {user.avatar ? (
+                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-2xl md:text-3xl font-bold text-gray-400">
+                      {(user.name || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Texto abajo del banner */}
               <div className="absolute bottom-0 left-0 right-0 p-6">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                  <div className="flex items-end gap-4">
-                    {/* Foto de perfil */}
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-gray-950 overflow-hidden bg-gray-800 shadow-xl">
-                      {user.avatar ? (
-                        <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-400">
-                          {(user.name || 'U').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Nombre y título */}
-                    <div className="mb-1">
-                      <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                        {dashboardTitle}
-                      </h1>
-                      <p className="text-gray-400 text-sm font-medium">
-                        Control de Compras, Ventas y Ganancias
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="bg-gray-900/80 backdrop-blur border border-white/10 px-4 py-3 rounded-xl shadow-2xl">
-                      <span className="text-gray-500 text-xs font-bold uppercase tracking-widest block">Inventario</span>
-                      <div className="text-2xl font-black text-yellow-400 tracking-tight tabular-nums">
-                        {totalInventory} <span className="text-sm text-gray-500 font-medium">unid.</span>
-                      </div>
-                    </div>
-
-                    <UserProfile
-                      user={user}
-                      onLogout={handleLogout}
-                      onUpdateUser={setUser}
-                      isAdmin={isAdmin}
-                      onOpenAdminPanel={() => setShowAdminPanel(true)}
-                      onCycleClosed={handleCycleClosed}
-                      onOpenHelpBot={() => setShowHelpBot(true)}
-                    />
-                  </div>
+                <div className="pl-28 md:pl-36">
+                  <h1 className="text-xl md:text-3xl font-extrabold text-white tracking-tight">
+                    {dashboardTitle}
+                  </h1>
+                  <p className="text-gray-400 text-xs md:text-sm font-medium">
+                    Control de Compras, Ventas y Ganancias
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -1135,6 +1152,13 @@ Ver consola para más detalles (F12)
         <HelpBotModal
           isOpen={showHelpBot}
           onClose={() => setShowHelpBot(false)}
+        />
+
+        {/* Formulario de Sugerencias */}
+        <SuggestionForm
+          isOpen={showSuggestionForm}
+          onClose={() => setShowSuggestionForm(false)}
+          user={user}
         />
 
         {/* Panel de Administración */}

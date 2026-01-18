@@ -1,6 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Camera, X, Check, HelpCircle, Shield, Lock, ImagePlus, Pencil, Bot } from 'lucide-react';
+import { User, LogOut, Camera, X, Check, HelpCircle, Shield, Lock, ImagePlus, Pencil, Bot, MessageSquarePlus, Info, Menu } from 'lucide-react';
+
+// Versión de la aplicación
+const APP_VERSION = "2.0.0";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useTooltips } from '@/contexts/TooltipContext';
@@ -21,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdminPanel, onCycleClosed, onOpenHelpBot }) => {
+const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdminPanel, onCycleClosed, onOpenHelpBot, onOpenSuggestionForm, useHamburgerTrigger = false }) => {
   const { toast } = useToast();
   const { tooltipsEnabled, toggleTooltips } = useTooltips();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -152,15 +155,25 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 overflow-hidden border border-white/10 hover:border-yellow-500/50 transition-all ring-2 ring-transparent hover:ring-yellow-500/20">
-            {previewImage || user.avatar ? (
-                <img src={previewImage || user.avatar} alt={user.name} className="h-full w-full object-cover" />
-            ) : (
-                <div className="h-full w-full bg-gray-800 flex items-center justify-center text-gray-400 font-bold text-sm">
-                    {(editName || user.name || 'U').charAt(0).toUpperCase()}
-                </div>
-            )}
-          </Button>
+          {useHamburgerTrigger ? (
+            <Button
+              variant="ghost"
+              className="h-10 w-10 rounded-full p-0 flex items-center justify-center bg-transparent hover:bg-white/10 active:bg-white/20 transition-all"
+              aria-label="Abrir menú"
+            >
+              <Menu className="h-5 w-5 text-white/80 hover:text-white" />
+            </Button>
+          ) : (
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 overflow-hidden border border-white/10 hover:border-yellow-500/50 transition-all ring-2 ring-transparent hover:ring-yellow-500/20">
+              {previewImage || user.avatar ? (
+                  <img src={previewImage || user.avatar} alt={user.name} className="h-full w-full object-cover" />
+              ) : (
+                  <div className="h-full w-full bg-gray-800 flex items-center justify-center text-gray-400 font-bold text-sm">
+                      {(editName || user.name || 'U').charAt(0).toUpperCase()}
+                  </div>
+              )}
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56 bg-gray-900 border border-white/10 text-white" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
@@ -182,6 +195,10 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
             <Bot className="mr-2 h-4 w-4" />
             <span>Robot de Ayuda</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenSuggestionForm} className="cursor-pointer text-blue-400 hover:bg-blue-900/20 hover:text-blue-300 focus:bg-blue-900/20 focus:text-blue-300">
+            <MessageSquarePlus className="mr-2 h-4 w-4" />
+            <span>Sugerir o Reportar</span>
+          </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/10" />
           <DropdownMenuItem onClick={() => setIsCloseCycleModalOpen(true)} className="cursor-pointer text-yellow-400 hover:bg-yellow-900/20 hover:text-yellow-300 focus:bg-yellow-900/20 focus:text-yellow-300">
             <Lock className="mr-2 h-4 w-4" />
@@ -201,6 +218,11 @@ const UserProfile = ({ user, onLogout, onUpdateUser, isAdmin = false, onOpenAdmi
             <LogOut className="mr-2 h-4 w-4" />
             <span>Cerrar Sesión</span>
           </DropdownMenuItem>
+          <DropdownMenuSeparator className="bg-white/10" />
+          <div className="px-2 py-2 flex items-center justify-center gap-2">
+            <Info className="h-3 w-3 text-gray-500" />
+            <span className="text-[10px] text-gray-500 font-medium">FuXion Control v{APP_VERSION}</span>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 

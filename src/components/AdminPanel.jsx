@@ -20,8 +20,13 @@ import {
   Calendar,
   Clock,
   AlertTriangle,
-  Infinity
+  Infinity,
+  MessageSquare,
+  Mail,
+  Eye,
+  KeyRound
 } from 'lucide-react';
+import AdminSuggestionsPanel from '@/components/AdminSuggestionsPanel';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -65,6 +70,11 @@ const AdminPanel = ({ currentUser, onClose }) => {
   // Estados para reset de contraseña
   const [resetEmail, setResetEmail] = useState('');
   const [resetCredentials, setResetCredentials] = useState(null);
+
+  // Estados para modal de detalles de usuario
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userModalPassword, setUserModalPassword] = useState(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   useEffect(() => {
     loadAdminData();
@@ -303,13 +313,48 @@ const AdminPanel = ({ currentUser, onClose }) => {
     }
   };
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text, label = "Texto") => {
     navigator.clipboard.writeText(text);
     toast({
       title: "Copiado",
-      description: "Texto copiado al portapapeles.",
+      description: `${label} copiado al portapapeles.`,
       duration: 2000
     });
+  };
+
+  // Resetear contraseña desde el modal de usuario
+  const handleResetPasswordFromModal = async () => {
+    if (!selectedUser) return;
+
+    setResettingPassword(true);
+    try {
+      const result = await resetUserPassword(selectedUser.id);
+
+      if (result.error) throw result.error;
+
+      setUserModalPassword(result.data.password);
+
+      toast({
+        title: "Contraseña Reseteada",
+        description: `Nueva contraseña generada para ${selectedUser.email}.`,
+        className: "bg-green-900 border-green-600 text-white"
+      });
+    } catch (error) {
+      console.error('[AdminPanel] Error resetting password:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo resetear la contraseña.",
+        variant: "destructive"
+      });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
+  // Cerrar modal de usuario
+  const closeUserModal = () => {
+    setSelectedUser(null);
+    setUserModalPassword(null);
   };
 
   const formatDate = (dateString) => {
@@ -458,6 +503,17 @@ const AdminPanel = ({ currentUser, onClose }) => {
             >
               <Crown className="w-4 h-4 inline mr-2" />
               Suscripciones
+            </button>
+            <button
+              onClick={() => setActiveTab('suggestions')}
+              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                activeTab === 'suggestions'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 inline mr-2" />
+              Sugerencias
             </button>
           </div>
         </div>
@@ -743,15 +799,19 @@ const AdminPanel = ({ currentUser, onClose }) => {
                 return (
                   <div
                     key={user.id}
-                    className="p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+                    className="p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all cursor-pointer group"
+                    onClick={() => setSelectedUser(user)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-white font-semibold">{user.email}</h4>
+                          <h4 className="text-white font-semibold group-hover:text-purple-400 transition-colors">
+                            {user.email}
+                          </h4>
                           <span className={`text-xs font-semibold ${getStatusColor(status)}`}>
                             {getStatusText(status)}
                           </span>
+                          <Eye className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-sm text-gray-400">
@@ -764,7 +824,7 @@ const AdminPanel = ({ currentUser, onClose }) => {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         {user.banned_until ? (
                           <Button
                             size="sm"
@@ -791,6 +851,10 @@ const AdminPanel = ({ currentUser, onClose }) => {
                 );
               })}
             </div>
+
+            <p className="text-xs text-gray-500 mt-4 text-center">
+              💡 Haz click en un usuario para ver sus credenciales y opciones de recuperación
+            </p>
           </div>
         )}
 
@@ -952,6 +1016,163 @@ const AdminPanel = ({ currentUser, onClose }) => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Suggestions Tab */}
+        {activeTab === 'suggestions' && (
+          <div className="bg-gray-900/40 border border-white/5 rounded-2xl p-6">
+            <AdminSuggestionsPanel currentUser={currentUser} />
+          </div>
+        )}
+
+        {/* Modal de Detalles de Usuario */}
+        {selectedUser && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              {/* Header */}
+              <div className="p-4 bg-purple-600/20 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-purple-500/20">
+                    <Users className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Credenciales del Usuario</h3>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeUserModal}
+                  className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                {/* Email */}
+                <div className="space-y-2">
+                  <label className="text-xs uppercase text-gray-500 font-bold flex items-center gap-2">
+                    <Mail className="w-3 h-3" />
+                    Correo Electrónico
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-3 bg-black/30 border border-white/10 rounded-xl font-mono text-white text-sm break-all">
+                      {selectedUser.email}
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => copyToClipboard(selectedUser.email, "Correo")}
+                      className="bg-purple-600 hover:bg-purple-700 h-10 w-10 p-0"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Contraseña */}
+                <div className="space-y-2">
+                  <label className="text-xs uppercase text-gray-500 font-bold flex items-center gap-2">
+                    <KeyRound className="w-3 h-3" />
+                    Contraseña
+                  </label>
+
+                  {!userModalPassword ? (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                        <p className="text-xs text-yellow-400">
+                          ⚠️ Las contraseñas están encriptadas. Para recuperar acceso, debes generar una nueva contraseña temporal.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleResetPasswordFromModal}
+                        disabled={resettingPassword}
+                        className="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-bold h-12"
+                      >
+                        {resettingPassword ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Generando...
+                          </>
+                        ) : (
+                          <>
+                            <Key className="w-4 h-4 mr-2" />
+                            Generar Nueva Contraseña
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 p-3 bg-green-900/30 border border-green-500/30 rounded-xl font-mono text-green-400 text-sm">
+                          {userModalPassword}
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => copyToClipboard(userModalPassword, "Contraseña")}
+                          className="bg-green-600 hover:bg-green-700 h-10 w-10 p-0"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-green-400">
+                        ✅ Nueva contraseña generada. Envíala al usuario.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Acciones rápidas */}
+                <div className="pt-4 border-t border-white/5 space-y-2">
+                  <Button
+                    onClick={() => {
+                      const text = userModalPassword
+                        ? `📧 Correo: ${selectedUser.email}\n🔐 Contraseña: ${userModalPassword}`
+                        : `📧 Correo: ${selectedUser.email}`;
+                      copyToClipboard(text, "Credenciales");
+                    }}
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copiar {userModalPassword ? 'Email + Contraseña' : 'Solo Email'}
+                  </Button>
+
+                  {userModalPassword && (
+                    <Button
+                      onClick={() => {
+                        const text = `Hola! Aquí están tus credenciales de acceso:\n\n📧 Correo: ${selectedUser.email}\n🔐 Contraseña: ${userModalPassword}\n\n🔗 Ingresa en: ${window.location.origin}\n\n⚠️ Te recomendamos cambiar tu contraseña después de ingresar.`;
+                        copyToClipboard(text, "Mensaje completo");
+                      }}
+                      variant="outline"
+                      className="w-full border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                    >
+                      <Mail className="w-4 h-4 mr-2" />
+                      Copiar Mensaje para Enviar
+                    </Button>
+                  )}
+                </div>
+
+                {/* Info adicional */}
+                <div className="pt-4 border-t border-white/5">
+                  <div className="grid grid-cols-2 gap-3 text-xs text-gray-500">
+                    <div>
+                      <span className="block text-gray-600">Creado:</span>
+                      {formatDate(selectedUser.created_at)}
+                    </div>
+                    <div>
+                      <span className="block text-gray-600">Último acceso:</span>
+                      {formatDate(selectedUser.last_sign_in_at)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
       </motion.div>
