@@ -26,7 +26,7 @@ import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
 import { supabase } from '@/lib/supabase';
 import { getTransactionsV2 } from '@/lib/transactionServiceV2';
-import { getUserProductsWithInventory } from '@/lib/productService';
+import { getUserProductsWithInventory, deleteProduct } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
 import { useToast } from '@/components/ui/use-toast';
 import ErrorDebugger from '@/components/ErrorDebugger';
@@ -568,25 +568,66 @@ Ver consola para más detalles (F12)
     if (!user) return;
 
     try {
+      console.log(`[handleDeleteProduct] Eliminando producto: "${productName}"`);
+
       // 1. Eliminar todas las transacciones del producto en la BD
       const { error: deleteTxError } = await deleteTransactionsByProductName(productName);
       if (deleteTxError) throw deleteTxError;
+      console.log('[handleDeleteProduct] Transacciones eliminadas de BD');
 
       // 2. Eliminar precio
       const { error: priceError } = await deletePrice(productName);
       if (priceError) throw priceError;
+      console.log('[handleDeleteProduct] Precio eliminado de BD');
 
-      // 3. Actualizar estado local
-      const newTransactions = transactions.filter(t => t.productName !== productName);
-      const newPrices = { ...prices };
-      delete newPrices[productName];
-      
-      setTransactions(newTransactions);
-      setPrices(newPrices);
-      
-      // 4. Recalcular
-      recalculateInventory(newTransactions);
-      extractCampaigns(newTransactions);
+      // 3. Eliminar el producto de la tabla products (por nombre)
+      const productToDelete = products.find(p => p.name === productName);
+      if (productToDelete?.id) {
+        const { error: productError } = await deleteProduct(productToDelete.id);
+        if (productError) {
+          console.warn('Error eliminando producto de BD (puede no existir):', productError);
+        } else {
+          console.log('[handleDeleteProduct] Producto eliminado de tabla products');
+        }
+      }
+
+      // 4. RECARGAR DATOS DESDE BD para asegurar consistencia
+      console.log('[handleDeleteProduct] Recargando datos desde BD...');
+
+      // Recargar transacciones desde BD
+      const { data: freshTransactions } = await getTransactionsV2(user.id);
+      if (freshTransactions) {
+        console.log(`[handleDeleteProduct] Transacciones recargadas: ${freshTransactions.length}`);
+        setTransactions(freshTransactions);
+        recalculateInventory(freshTransactions);
+        extractCampaigns(freshTransactions);
+      }
+
+      // Recargar productos desde BD
+      const { data: freshProducts } = await getUserProductsWithInventory(user.id);
+      if (freshProducts) {
+        console.log(`[handleDeleteProduct] Productos recargados: ${freshProducts.length}`);
+        setProducts(freshProducts);
+
+        // Actualizar inventoryMap desde productos frescos
+        const freshInventoryMap = {};
+        freshProducts.forEach(p => {
+          const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+          freshInventoryMap[p.name] = stock;
+        });
+        setInventoryMap(freshInventoryMap);
+
+        // Actualizar precios desde productos frescos
+        const freshPrices = {};
+        freshProducts.forEach(p => {
+          if (p.listPrice > 0) {
+            freshPrices[p.name] = p.listPrice;
+          }
+        });
+        setPrices(freshPrices);
+      }
+
+      console.log('[handleDeleteProduct] ✅ Eliminación completada');
 
       toast({
         title: "Producto Eliminado",

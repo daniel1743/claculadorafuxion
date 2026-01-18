@@ -145,6 +145,37 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
         const totalValue = rows.reduce((a, b) => a + (b.totalBoxes * b.listPrice), 0);
         summary = { totalProducts: rows.length, totalBoxes, totalValue };
     }
+    else if (type === 'personal_consumption') {
+        // Agregar consumo personal y muestras por producto
+        const consumptionMap = {};
+        let totalMarketingSamples = 0;
+
+        transactions.forEach(t => {
+            if (t.type === 'personal_consumption') {
+                const key = t.productName;
+                if (!consumptionMap[key]) {
+                    consumptionMap[key] = {
+                        productName: key,
+                        totalBoxes: 0,
+                        totalSachets: 0,
+                        lastDate: t.date
+                    };
+                }
+                consumptionMap[key].totalBoxes += t.quantityBoxes || 0;
+                consumptionMap[key].totalSachets += t.quantitySachets || 0;
+                if (new Date(t.date) > new Date(consumptionMap[key].lastDate)) {
+                    consumptionMap[key].lastDate = t.date;
+                }
+            } else if (t.type === 'marketing_sample') {
+                totalMarketingSamples += t.quantitySachets || 0;
+            }
+        });
+
+        rows = Object.values(consumptionMap);
+        const totalBoxes = rows.reduce((a, b) => a + b.totalBoxes, 0);
+        const totalSachets = rows.reduce((a, b) => a + b.totalSachets, 0);
+        summary = { totalProducts: rows.length, totalBoxes, totalSachets, totalMarketingSamples };
+    }
 
     return { rows, summary };
   }, [type, transactions, loans, products]);
@@ -201,6 +232,26 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                         </div>
                     </div>
                 )}
+                {type === 'personal_consumption' && (
+                    <>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Productos Consumidos</div>
+                            <div className="text-2xl font-bold text-white">{modalData.summary.totalProducts || 0}</div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Cajas Consumidas</div>
+                            <div className="text-2xl font-bold text-violet-400">{modalData.summary.totalBoxes || 0}</div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Sobres Consumidos</div>
+                            <div className="text-2xl font-bold text-violet-300">{modalData.summary.totalSachets || 0}</div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Muestras/Regalos</div>
+                            <div className="text-2xl font-bold text-yellow-400">{modalData.summary.totalMarketingSamples || 0} sobres</div>
+                        </div>
+                    </>
+                )}
             </div>
 
             <table className="w-full text-sm text-left">
@@ -237,6 +288,14 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                                 <th className="px-4 py-3">Producto / Descripción</th>
                                 <th className="px-4 py-3 text-right">Cantidad</th>
                                 <th className="px-4 py-3 text-right rounded-tr-lg">Total</th>
+                            </>
+                        )}
+                        {type === 'personal_consumption' && (
+                             <>
+                                <th className="px-4 py-3 rounded-tl-lg">Producto</th>
+                                <th className="px-4 py-3 text-right">Cajas</th>
+                                <th className="px-4 py-3 text-right">Sobres</th>
+                                <th className="px-4 py-3 text-right rounded-tr-lg">Último Consumo</th>
                             </>
                         )}
                     </tr>
@@ -297,6 +356,20 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                                     <td className="px-4 py-3 text-right text-gray-300 font-mono">{row.quantity || 1}</td>
                                     <td className={`px-4 py-3 text-right font-bold font-mono ${type === 'sales' ? 'text-green-400' : 'text-red-400'}`}>
                                         {formatCLP(row.total)}
+                                    </td>
+                                </>
+                            )}
+                            {type === 'personal_consumption' && (
+                                <>
+                                    <td className="px-4 py-3 font-medium text-white">{row.productName}</td>
+                                    <td className="px-4 py-3 text-right text-violet-400 font-mono font-bold">
+                                        {row.totalBoxes > 0 ? row.totalBoxes : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-violet-300 font-mono">
+                                        {row.totalSachets > 0 ? row.totalSachets : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-gray-500 text-xs">
+                                        {row.lastDate ? new Date(row.lastDate).toLocaleDateString() : '-'}
                                     </td>
                                 </>
                             )}

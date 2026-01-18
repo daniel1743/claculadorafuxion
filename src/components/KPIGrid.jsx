@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
@@ -291,6 +291,51 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
     // Ordenar por puntos y tomar top 3
     pointsByProduct.sort((a, b) => b.points - a.points);
 
+    // NUEVO: Calcular consumo personal y muestras
+    let totalPersonalConsumptionBoxes = 0;
+    let totalPersonalConsumptionSachets = 0;
+    let totalMarketingSamples = 0;
+    const consumptionByProduct = [];
+
+    transactions.forEach(t => {
+      if (t.type === 'personal_consumption') {
+        totalPersonalConsumptionBoxes += t.quantityBoxes || 0;
+        totalPersonalConsumptionSachets += t.quantitySachets || 0;
+
+        // Agrupar por producto
+        const existingProduct = consumptionByProduct.find(p => p.label === t.productName);
+        if (existingProduct) {
+          existingProduct.boxes += t.quantityBoxes || 0;
+          existingProduct.sachets += t.quantitySachets || 0;
+        } else {
+          consumptionByProduct.push({
+            label: t.productName,
+            boxes: t.quantityBoxes || 0,
+            sachets: t.quantitySachets || 0
+          });
+        }
+      } else if (t.type === 'marketing_sample') {
+        totalMarketingSamples += t.quantitySachets || 0;
+      }
+    });
+
+    // Formatear para preview
+    consumptionByProduct.forEach(p => {
+      const parts = [];
+      if (p.boxes > 0) parts.push(`${p.boxes} cajas`);
+      if (p.sachets > 0) parts.push(`${p.sachets} sobres`);
+      p.value = parts.join(' + ') || '0';
+    });
+
+    // Calcular valor de consumo personal (a precio lista)
+    let personalConsumptionValue = 0;
+    consumptionByProduct.forEach(p => {
+      const listPrice = prices?.[p.label] || 0;
+      const sachetsPerBox = products?.find(prod => prod.name === p.label)?.sachetsPerBox || 28;
+      // Valor = (cajas * precio) + (sobres * precio/sachetsPerBox)
+      personalConsumptionValue += (p.boxes * listPrice) + (p.sachets * (listPrice / sachetsPerBox));
+    });
+
     // NUEVO: Calcular préstamos totales
     let totalLoanedBoxes = 0;
     let totalLoanedValue = 0;
@@ -351,7 +396,12 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       totalLoanedValue,
       loansByProduct,
       totalPoints,
-      pointsByProduct
+      pointsByProduct,
+      totalPersonalConsumptionBoxes,
+      totalPersonalConsumptionSachets,
+      totalMarketingSamples,
+      personalConsumptionValue,
+      consumptionByProduct
     };
   }, [transactions, inventoryMap, prices, products, loans, fuxionPayments]);
 
@@ -426,7 +476,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
                 {showAllCards ? 'Ocultar Métricas' : 'Ver Todas las Métricas'}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {showAllCards ? 'Mostrar solo principales' : '+9 indicadores disponibles'}
+                {showAllCards ? 'Mostrar solo principales' : '+10 indicadores disponibles'}
               </p>
             </div>
             <motion.div
@@ -530,6 +580,20 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
                   ...metrics.loansByProduct.slice(0, 3)
                 ]}
                 onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
+              />
+              <MetricCard
+                title="Consumo Personal"
+                value={`${metrics.totalPersonalConsumptionBoxes} cajas`}
+                icon={User}
+                trend={metrics.totalPersonalConsumptionSachets > 0 ? `+ ${metrics.totalPersonalConsumptionSachets} sobres` : "Tu consumo propio"}
+                color="violet"
+                delay={0.4}
+                hoverData={[
+                  ...(metrics.personalConsumptionValue > 0 ? [{ label: 'Valor Consumido', value: formatCLP(metrics.personalConsumptionValue) }] : []),
+                  ...(metrics.totalMarketingSamples > 0 ? [{ label: 'Muestras/Regalos', value: `${metrics.totalMarketingSamples} sobres` }] : []),
+                  ...metrics.consumptionByProduct.slice(0, 3)
+                ]}
+                onClick={() => handleCardClick('personal_consumption', 'Consumo Personal', 'violet')}
               />
               <MetricCard
                 title="Estado del Negocio"

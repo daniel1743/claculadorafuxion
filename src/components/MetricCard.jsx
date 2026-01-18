@@ -42,6 +42,27 @@ const MetricCard = ({ title, value, icon: Icon, trend, color = 'gold', isText = 
       value: 'text-white',
       trend: 'text-purple-400/70'
     },
+    violet: {
+      bg: 'bg-gradient-to-br from-violet-500/10 to-violet-600/5',
+      border: 'border-violet-500/20',
+      iconBg: 'bg-violet-500/20 text-violet-400',
+      value: 'text-violet-400',
+      trend: 'text-violet-400/70'
+    },
+    orange: {
+      bg: 'bg-gradient-to-br from-orange-500/10 to-orange-600/5',
+      border: 'border-orange-500/20',
+      iconBg: 'bg-orange-500/20 text-orange-400',
+      value: 'text-orange-400',
+      trend: 'text-orange-400/70'
+    },
+    emerald: {
+      bg: 'bg-gradient-to-br from-emerald-500/10 to-emerald-600/5',
+      border: 'border-emerald-500/20',
+      iconBg: 'bg-emerald-500/20 text-emerald-400',
+      value: 'text-emerald-400',
+      trend: 'text-emerald-400/70'
+    },
     gray: {
       bg: 'bg-gradient-to-br from-gray-800/30 to-gray-900/30',
       border: 'border-gray-700/30',
