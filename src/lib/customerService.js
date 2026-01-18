@@ -313,6 +313,58 @@ export const getReferredBy = async (userId, customerId) => {
 };
 
 /**
+ * Obtiene los clientes referidos por un cliente específico
+ * @param {string} referrerId - ID del cliente que refirió
+ * @returns {Promise<{data: Array|null, error: Error|null}>}
+ */
+export const getClientReferrals = async (referrerId) => {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('id, full_name, email, phone, created_at')
+      .eq('referred_by_client_id', referrerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('[customerService] Error getting client referrals:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Cuenta los referidos de cada cliente (clientes que fueron referidos por ellos)
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<{data: Object|null, error: Error|null}>} - Mapa de {clientId: count}
+ */
+export const getClientReferralCounts = async (userId) => {
+  try {
+    // Obtener todos los clientes que tienen referred_by_client_id
+    const { data, error } = await supabase
+      .from('customers')
+      .select('referred_by_client_id')
+      .eq('user_id', userId)
+      .not('referred_by_client_id', 'is', null);
+
+    if (error) throw error;
+
+    // Contar por referrer
+    const counts = {};
+    (data || []).forEach(customer => {
+      const referrerId = customer.referred_by_client_id;
+      counts[referrerId] = (counts[referrerId] || 0) + 1;
+    });
+
+    return { data: counts, error: null };
+  } catch (error) {
+    console.error('[customerService] Error getting referral counts:', error);
+    return { data: {}, error };
+  }
+};
+
+/**
  * Obtiene el historial de compras de un cliente
  * @param {string} userId - ID del usuario
  * @param {string} customerId - ID del cliente
