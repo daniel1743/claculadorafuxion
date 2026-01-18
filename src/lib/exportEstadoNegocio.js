@@ -188,7 +188,13 @@ export const exportEstadoNegocioPDF = async (metrics, user, humanSummary = null)
     doc.setTextColor(...balanceColor);
     doc.text(`Balance actual: ${humanSummary.formatted.balanceTodayWithSign}`, margin + 5, y + 31);
 
-    y += 42;
+    // Balance con FuXion
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Balance con Pagos FuXion: ${humanSummary.formatted.balanceTodayWithFuxion}`, margin + 5, y + 38);
+
+    y += 48;
 
     // Bloque 2: Stock disponible
     doc.setFillColor(240, 240, 240);
@@ -226,7 +232,13 @@ export const exportEstadoNegocioPDF = async (metrics, user, humanSummary = null)
     doc.setFont('helvetica', 'bold');
     doc.text(`Resultado: ${humanSummary.formatted.projectedProfitOrLoss}`, margin + 100, y + 17);
 
-    y += 32;
+    // Proyección con FuXion
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Incluyendo Pagos FuXion: ${humanSummary.formatted.finalProjectionIfSellAllWithFuxion} → ${humanSummary.formatted.projectedProfitOrLossWithFuxion}`, margin + 5, y + 24);
+
+    y += 38;
 
     // Veredicto final con recuadro destacado
     const verdictBgColor = humanSummary.humanText.verdictType === 'positive'
@@ -257,6 +269,14 @@ export const exportEstadoNegocioPDF = async (metrics, user, humanSummary = null)
     doc.text(verdictLines, margin + 15, y + 13);
 
     y += 28;
+
+    // One-liner
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(202, 138, 4);
+    const oneLinerLines = doc.splitTextToSize(`Resumen en 1 frase: ${humanSummary.humanText.oneLiner}`, pageWidth - margin * 2);
+    doc.text(oneLinerLines, margin, y);
+    y += oneLinerLines.length * 5 + 6;
 
     // Nota sobre pagos FuXion
     doc.setFontSize(9);
@@ -501,6 +521,40 @@ export const exportEstadoNegocioDOCX = async (metrics, user, humanSummary = null
           new TextRun({ text: `⚠ Prestamos activos: ${metrics.prestamosCount} (${metrics.totalPrestado} unidades) - Valor: ${formatCLP(metrics.valorPrestamos)}`, size: 22, color: 'D97706' })
         ]
       })
+    ] : []),
+
+    // Bloque de explicación de pérdida (solo si hay pérdida)
+    ...(metrics.gananciaNeta < 0 ? [
+      new Paragraph({ spacing: { after: 300 } }),
+      new Paragraph({
+        shading: { type: ShadingType.SOLID, fill: 'FEE2E2' },
+        border: { top: { style: BorderStyle.SINGLE, color: 'EF4444', size: 6 }, bottom: { style: BorderStyle.SINGLE, color: 'EF4444', size: 6 }, left: { style: BorderStyle.SINGLE, color: 'EF4444', size: 6 }, right: { style: BorderStyle.SINGLE, color: 'EF4444', size: 6 } },
+        children: [
+          new TextRun({ text: '📉 ¿Por qué tengo una pérdida?', bold: true, size: 28, color: 'B91C1C' })
+        ],
+        spacing: { after: 200 }
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: `Pérdida actual: ${formatCLP(metrics.perdidaAbsoluta)}. No es un error: se debe a gastos reales o inversión aún no recuperada.`, size: 22, color: '374151' })
+        ],
+        spacing: { after: 200 }
+      }),
+      ...[
+        metrics.totalPublicidad > 0 ? `• Publicidad: ${formatCLP(metrics.totalPublicidad)}` : null,
+        metrics.totalPersonalUse > 0 ? `• Consumo personal: ${formatCLP(metrics.totalPersonalUse)}` : null,
+        metrics.totalMarketingSamples > 0 ? `• Muestras/Regalos entregados: ${formatCLP(metrics.totalMarketingSamples)}` : null,
+        metrics.inversionNoRecuperada > 0 ? `• Inversión no recuperada (stock pendiente de vender): ${formatCLP(metrics.inversionNoRecuperada)}` : null
+      ].filter(Boolean).map(line => new Paragraph({
+        children: [new TextRun({ text: line, size: 20, color: '4B5563' })],
+        spacing: { after: 100 }
+      })),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Esta pérdida es temporal: tienes inventario y gastos que se recuperan al vender. Si faltan pagos de FuXion, agrégalos para reflejar el balance completo.', size: 20, color: '6B7280', italics: true })
+        ],
+        spacing: { after: 300 }
+      })
     ] : [])
   ];
 
@@ -564,6 +618,12 @@ export const exportEstadoNegocioDOCX = async (metrics, user, humanSummary = null
       }),
       new Paragraph({
         children: [
+          new TextRun({ text: `Balance con Pagos FuXion: `, size: 20, color: '047857' }),
+          new TextRun({ text: humanSummary.formatted.balanceTodayWithFuxion, size: 20, bold: true, color: '10B981' })
+        ]
+      }),
+      new Paragraph({
+        children: [
           new TextRun({ text: humanSummary.humanText.balanceTodayText, size: 20, italics: true, color: '6B7280' })
         ],
         spacing: { after: 300 }
@@ -610,6 +670,13 @@ export const exportEstadoNegocioDOCX = async (metrics, user, humanSummary = null
         ],
         spacing: { after: 300 }
       }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: `Con Pagos FuXion: `, size: 20, color: '047857' }),
+          new TextRun({ text: `${humanSummary.formatted.finalProjectionIfSellAllWithFuxion} → ${humanSummary.formatted.projectedProfitOrLossWithFuxion}`, size: 20, bold: true, color: '059669' })
+        ],
+        spacing: { after: 300 }
+      }),
 
       // Veredicto final
       new Paragraph({
@@ -643,6 +710,16 @@ export const exportEstadoNegocioDOCX = async (metrics, user, humanSummary = null
         children: [
           new TextRun({ text: 'Nota sobre Pagos FuXion: ', size: 20, bold: true, color: '059669' }),
           new TextRun({ text: humanSummary.humanText.fuxionNoteText, size: 20, color: '047857' })
+        ],
+        spacing: { after: 400 }
+      }),
+
+      // One-liner
+      new Paragraph({
+        shading: { type: ShadingType.SOLID, fill: 'FEF3C7' },
+        children: [
+          new TextRun({ text: 'Resumen en 1 frase: ', size: 20, bold: true, color: 'CA8A04' }),
+          new TextRun({ text: humanSummary.humanText.oneLiner, size: 20, color: '854D0E' })
         ],
         spacing: { after: 400 }
       })

@@ -269,6 +269,9 @@ const EstadoDelNegocioModal = ({
                       {metrics.gananciaNeta >= 0 ? '+' : ''}{formatCLP(metrics.gananciaNeta)}
                     </span>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Balance considerando Pagos FuXion: <span className="text-emerald-400 font-semibold">{humanSummary.formatted.balanceTodayWithFuxion}</span>
+                  </p>
                 </div>
               </div>
 
@@ -290,6 +293,12 @@ const EstadoDelNegocioModal = ({
                   <span>Publicidad</span>
                   <span className="text-red-400">-{formatCLP(metrics.totalPublicidad)}</span>
                 </div>
+                {(humanSummary.metrics.breakdownExpenses?.otros || 0) > 0 && (
+                  <div className="flex justify-between text-gray-400">
+                    <span>Otros gastos/salidas</span>
+                    <span className="text-red-400">-{formatCLP(humanSummary.metrics.breakdownExpenses.otros)}</span>
+                  </div>
+                )}
                 {metrics.totalSalidas > 0 && (
                   <div className="flex justify-between text-gray-400">
                     <span>Salidas</span>
@@ -297,6 +306,22 @@ const EstadoDelNegocioModal = ({
                   </div>
                 )}
               </div>
+
+              {humanSummary.metrics.balanceTodayWithFuxion < 0 && (
+                <div className="mt-3 bg-red-500/5 border border-red-500/20 rounded-xl p-3 text-xs text-gray-300 space-y-1">
+                  <p className="text-red-300 font-semibold">¿Por qué estás en negativo?</p>
+                  {humanSummary.metrics.breakdownExpenses.compras > 0 && (
+                    <p>• Compras: {formatCLP(humanSummary.metrics.breakdownExpenses.compras)}</p>
+                  )}
+                  {humanSummary.metrics.breakdownExpenses.publicidad > 0 && (
+                    <p>• Publicidad: {formatCLP(humanSummary.metrics.breakdownExpenses.publicidad)}</p>
+                  )}
+                  {humanSummary.metrics.breakdownExpenses.otros > 0 && (
+                    <p>• Otros gastos/salidas: {formatCLP(humanSummary.metrics.breakdownExpenses.otros)}</p>
+                  )}
+                  <p className="text-gray-400">Esta pérdida es temporal si aún tienes stock o pagos FuXion pendientes de registrar.</p>
+                </div>
+              )}
 
               {/* Préstamos */}
               {metrics.prestamosCount > 0 && (
@@ -351,12 +376,14 @@ const EstadoDelNegocioModal = ({
                 <div>
                   <p className="text-gray-400 text-sm">Recuperación Potencial</p>
                   <p className="text-2xl font-bold text-yellow-400">{formatCLP(metrics.recuperacionPotencial)}</p>
+                  <p className="text-xs text-emerald-300 mt-1">Con Pagos FuXion: {humanSummary.formatted.finalProjectionIfSellAllWithFuxion}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 text-sm">Ganancia Potencial Estimada</p>
                   <p className={`text-2xl font-bold ${metrics.gananciaPotencial >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {metrics.gananciaPotencial >= 0 ? '+' : ''}{formatCLP(metrics.gananciaPotencial)}
                   </p>
+                  <p className="text-xs text-emerald-300 mt-1">Incluyendo FuXion: {humanSummary.formatted.projectedProfitOrLossWithFuxion}</p>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-4">
@@ -451,6 +478,11 @@ const EstadoDelNegocioModal = ({
                 5. Resumen Final
                 <span className="text-sm font-normal text-yellow-400/80 ml-2">(en simple)</span>
               </h3>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-4 text-sm text-gray-100">
+                <p className="text-yellow-300 font-semibold mb-1">Resumen en 1 frase</p>
+                <p>{humanSummary.humanText.oneLiner}</p>
+              </div>
 
               {/* Bloque 1: Estado al día de hoy */}
               <div className="bg-black/30 rounded-xl p-5 mb-4 border border-white/5">

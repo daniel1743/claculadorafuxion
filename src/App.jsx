@@ -788,6 +788,7 @@ Ver consola para más detalles (F12)
                       isAdmin={isAdmin}
                       onOpenAdminPanel={() => setShowAdminPanel(true)}
                       onCycleClosed={handleCycleClosed}
+                      onOpenHelpBot={() => setShowHelpBot(true)}
                     />
                   </div>
                 </div>
@@ -1108,6 +1109,12 @@ Ver consola para más detalles (F12)
             fuxionPayments={totalFuxionPayments}
           />
         )}
+
+        {/* Robot de Ayuda */}
+        <HelpBotModal
+          isOpen={showHelpBot}
+          onClose={() => setShowHelpBot(false)}
+        />
 
         {/* Panel de Administración */}
         {showAdminPanel && isAdmin && (
