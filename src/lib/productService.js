@@ -332,3 +332,64 @@ export const calculateWeightedAverageCost = async (productId, newPurchase) => {
   }
 };
 
+/**
+ * Sincroniza el inventario de todos los productos basándose en el historial de transacciones
+ * Útil cuando el stock real se desvía del historial por borrados manuales o errores
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const syncAllProductsInventoryFromTransactions = async (userId) => {
+  try {
+    // 1. Obtener todos los productos y todas las transacciones
+    const [{ data: products, error: pError }, { data: transactions, error: tError }] = await Promise.all([
+      supabase.from('products').select('*').eq('user_id', userId),
+      supabase.from('transactions').select('*').eq('user_id', userId)
+    ]);
+
+    if (pError) throw pError;
+    if (tError) throw tError;
+
+    // 2. Calcular el stock neto para cada producto
+    const stockMap = {};
+    // Inicializar todos los productos en 0
+    products.forEach(p => {
+      stockMap[p.id] = 0;
+    });
+
+    transactions.forEach(t => {
+      const productId = t.product_id;
+      if (!productId || stockMap[productId] === undefined) return;
+
+      const qty = parseInt(t.quantity_boxes || t.quantity || 0);
+      if (qty <= 0) return;
+
+      const type = t.type;
+      if (type === 'compra' || type === 'purchase') {
+        stockMap[productId] += qty;
+      } else if (['venta', 'sale', 'personal_consumption', 'marketing_sample', 'outflow', 'loan'].includes(type)) {
+        stockMap[productId] -= qty;
+      }
+      // box_opening no afecta el stock total de cajas (solo mueve entre productos si aplica, pero aquí asumimos stock de cajas)
+    });
+
+    // 3. Actualizar cada producto en la base de datos
+    const updatePromises = Object.entries(stockMap).map(([id, stock]) => {
+      return supabase
+        .from('products')
+        .update({ 
+          current_stock_boxes: Math.max(0, stock),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+    });
+
+    const results = await Promise.all(updatePromises);
+    const firstError = results.find(r => r.error)?.error;
+    if (firstError) throw firstError;
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error en syncAllProductsInventoryFromTransactions:', error);
+    return { success: false, error };
+  }
+};

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
@@ -26,7 +26,7 @@ import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { getCurrentUser, onAuthStateChange, signOut, getTransactions, getPrices, addMultipleTransactions, deleteTransaction, updateTransactionsByProductName, deleteTransactionsByProductName, upsertPrice, deletePrice, getUserProfile, createUserProfile } from '@/lib/supabaseService';
 import { supabase } from '@/lib/supabase';
 import { getTransactionsV2 } from '@/lib/transactionServiceV2';
-import { getUserProductsWithInventory, deleteProduct } from '@/lib/productService';
+import { getUserProductsWithInventory, deleteProduct, updateProductInventory, getProductById, getProductByName, syncAllProductsInventoryFromTransactions } from '@/lib/productService';
 import { getUserLoans } from '@/lib/loanService';
 import { useToast } from '@/components/ui/use-toast';
 import ErrorDebugger from '@/components/ErrorDebugger';
@@ -471,20 +471,136 @@ Ver consola para más detalles (F12)
   const handleDeleteTransaction = async (id) => {
     if (!user) return;
 
+    const txToDelete = transactions.find(t => t.id === id);
+
+    const adjustInventoryAfterDelete = async (tx) => {
+      if (!tx) return;
+      const productId = tx.productId || tx.product_id;
+      const productName = tx.productName || tx.product_name;
+      const qty = parseInt(tx.quantityBoxes ?? tx.quantity ?? 0) || 0;
+      if ((!productId && !productName) || qty <= 0) return;
+
+      let delta = 0;
+      const type = tx.type;
+      if (type === 'compra' || type === 'purchase') {
+        delta = -qty;
+      } else if (type === 'venta' || type === 'sale') {
+        delta = qty;
+      } else if (type === 'personal_consumption' || type === 'marketing_sample' || type === 'outflow' || type === 'loan') {
+        delta = qty;
+      } else if (type === 'box_opening' || type === 'advertising' || type === 'publicidad') {
+        return;
+      } else {
+        return;
+      }
+
+      let product = null;
+      if (productId) {
+        product = products.find(p => p.id === productId);
+      }
+      if (!product && productName) {
+        product = products.find(p => p.name === productName);
+      }
+      if (!product && productId) {
+        const { data } = await getProductById(productId);
+        if (data) product = data;
+      } else if (!product && productName) {
+        const { data } = await getProductByName(user.id, productName);
+        if (data) product = data;
+      }
+      if (!product) return;
+      // Verificar que el producto tiene datos de stock (soportar ambos formatos: camelCase y snake_case)
+      const hasStockData = product.current_stock_boxes !== undefined || product.currentStockBoxes !== undefined;
+      if (!hasStockData) return;
+
+      const currentStock = parseInt(product.current_stock_boxes ?? product.currentStockBoxes ?? 0) || 0;
+      const newStock = Math.max(0, currentStock + delta);
+      if (newStock === currentStock) return;
+
+      await updateProductInventory(product.id, { current_stock_boxes: newStock });
+    };
+
     try {
       const { error } = await deleteTransaction(id);
 
       if (error) throw error;
 
-      const newTransactions = transactions.filter(t => t.id !== id);
-      setTransactions(newTransactions);
-      recalculateInventory(newTransactions);
-      extractCampaigns(newTransactions);
+      await adjustInventoryAfterDelete(txToDelete);
+
+      const { data: freshTransactions } = await getTransactionsV2(user.id);
+      if (freshTransactions) {
+        setTransactions(freshTransactions);
+        recalculateInventory(freshTransactions);
+        extractCampaigns(freshTransactions);
+      }
+
+      const { data: freshProducts } = await getUserProductsWithInventory(user.id);
+      if (freshProducts) {
+        setProducts(freshProducts);
+        const freshInventoryMap = {};
+        const freshPrices = {};
+        freshProducts.forEach(p => {
+          const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+          freshInventoryMap[p.name] = stock;
+          if (p.listPrice > 0) freshPrices[p.name] = p.listPrice;
+        });
+        setInventoryMap(freshInventoryMap);
+        setPrices(prev => ({ ...prev, ...freshPrices }));
+      }
     } catch (error) {
       console.error('Error eliminando transacción:', error);
       toast({
         title: "Error",
         description: "No se pudo eliminar la transacción. Por favor, intenta de nuevo.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Sincronizar inventario con historial (recarga completa)
+  const handleSyncInventory = async () => {
+    if (!user) return;
+    try {
+      // 1. Ejecutar sincronización real en la base de datos (recalcula desde transacciones)
+      const { success, error: syncError } = await syncAllProductsInventoryFromTransactions(user.id);
+      
+      if (!success) throw syncError;
+
+      // 2. Recargar datos locales
+      const [{ data: freshTransactions }, { data: freshProducts }] = await Promise.all([
+        getTransactionsV2(user.id),
+        getUserProductsWithInventory(user.id)
+      ]);
+
+      if (freshTransactions) {
+        setTransactions(freshTransactions);
+        recalculateInventory(freshTransactions);
+        extractCampaigns(freshTransactions);
+      }
+
+      if (freshProducts) {
+        setProducts(freshProducts);
+        const freshInventoryMap = {};
+        const freshPrices = {};
+        freshProducts.forEach(p => {
+          const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+          freshInventoryMap[p.name] = stock;
+          if (p.listPrice > 0) freshPrices[p.name] = p.listPrice;
+        });
+        setInventoryMap(freshInventoryMap);
+        setPrices(prev => ({ ...prev, ...freshPrices }));
+      }
+
+      toast({
+        title: "Sincronizado",
+        description: "Inventario actualizado según historial de compras/ventas.",
+        className: "bg-green-900 border-green-600 text-white"
+      });
+    } catch (error) {
+      console.error('Error sincronizando inventario:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo sincronizar el inventario.",
         variant: "destructive"
       });
     }
@@ -814,6 +930,9 @@ Ver consola para más detalles (F12)
               {/* Iconos arriba a la derecha */}
               <div className="absolute top-3 left-0 right-0 px-3 flex justify-end z-10">
                 <div className="flex items-center gap-2 bg-gray-900/70 border border-white/10 rounded-xl px-3 py-2 shadow-lg backdrop-blur max-w-fit">
+                  <Button size="icon" variant="ghost" className="h-10 w-10 text-yellow-400 hover:bg-yellow-500/10" onClick={handleSyncInventory} title="Sincronizar inventario con historial">
+                    <RefreshCw className="h-5 w-5" />
+                  </Button>
                   <NotificationBell userId={user?.id} />
                   <UserProfile
                     user={user}
@@ -903,10 +1022,21 @@ Ver consola para más detalles (F12)
             <section className="bg-gray-900/40 border border-white/5 rounded-3xl p-1 backdrop-blur-sm shadow-2xl overflow-hidden">
                 <Tabs defaultValue="ventas" className="w-full">
                 <div className="px-4 sm:px-6 py-4 bg-gray-900/60 border-b border-white/5 flex flex-col gap-4">
-                    <h2 className="text-lg sm:text-xl font-bold text-gray-200 flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                    Gestión de Operaciones
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-200 flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                        Gestión de Operaciones
+                      </h2>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="bg-yellow-500/10 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 text-xs gap-2 w-fit sm:w-auto"
+                        onClick={handleSyncInventory}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Sincronizar Inventario Real
+                      </Button>
+                    </div>
                     {/* Contenedor scrollable para tabs en móvil */}
                     <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent pb-2 -mb-2">
                       <TabsList className="bg-black/40 p-1 rounded-xl border border-white/5 inline-flex min-w-max">
