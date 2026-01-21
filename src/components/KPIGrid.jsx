@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid, User } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid, User, Truck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
@@ -371,6 +371,45 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       });
     }
 
+    // NUEVO: Calcular gastos de delivery
+    let totalDeliveryExpenses = 0;
+    const deliveryByMonth = [];
+    const deliveryTransactions = [];
+
+    transactions.forEach(t => {
+      const isDelivery = t.type === 'delivery' ||
+        (t.type === 'outflow' && (t.notes || '').toLowerCase().includes('delivery')) ||
+        (t.type === 'outflow' && (t.notes || '').toLowerCase().includes('envío')) ||
+        (t.type === 'outflow' && (t.notes || '').toLowerCase().includes('envio')) ||
+        (t.type === 'outflow' && (t.notes || '').toLowerCase().includes('despacho'));
+
+      if (isDelivery) {
+        const amount = t.total || t.totalAmount || 0;
+        totalDeliveryExpenses += amount;
+        deliveryTransactions.push(t);
+      }
+    });
+
+    // Agrupar por mes para preview
+    const deliveryByMonthMap = {};
+    deliveryTransactions.forEach(t => {
+      const date = new Date(t.date || t.created_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' });
+
+      if (!deliveryByMonthMap[monthKey]) {
+        deliveryByMonthMap[monthKey] = { label: monthLabel, total: 0 };
+      }
+      deliveryByMonthMap[monthKey].total += t.total || t.totalAmount || 0;
+    });
+
+    Object.values(deliveryByMonthMap)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 3)
+      .forEach(m => {
+        deliveryByMonth.push({ label: m.label, value: formatCLP(m.total) });
+      });
+
     // Debug opcional para diagnstico de KPI
     console.log('[KPIGrid] inversionCompras:', totalPurchases);
     console.log('[KPIGrid] valorInventario:', totalInventoryValue);
@@ -401,7 +440,10 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       totalPersonalConsumptionSachets,
       totalMarketingSamples,
       personalConsumptionValue,
-      consumptionByProduct
+      consumptionByProduct,
+      totalDeliveryExpenses,
+      deliveryByMonth,
+      deliveryCount: deliveryTransactions.length
     };
   }, [transactions, inventoryMap, prices, products, loans, fuxionPayments]);
 
@@ -539,16 +581,18 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
                 hoverData={metrics.fuxionPayments > 0 ? [{ label: 'Suma a Ganancia Neta', value: 'Sí' }] : []}
                 onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
               />
+              {/* REEMPLAZADO: Tarjeta Mejor Campaña por Gastos de Delivery */}
               <MetricCard
-                title="Mejor Campaña (ROI)"
-                value={metrics.bestCampaign}
-                icon={Target}
-                trend="Top Performer"
-                color="gold"
-                isText
+                title="Gastos de Delivery"
+                value={formatCLP(metrics.totalDeliveryExpenses)}
+                icon={Truck}
+                trend={metrics.deliveryCount > 0 ? `${metrics.deliveryCount} envíos` : "Sin envíos"}
+                color="cyan"
                 delay={0.2}
-                onClick={() => handleCardClick('ads', 'Rendimiento de Campañas', 'gold')}
+                hoverData={metrics.deliveryByMonth.length > 0 ? metrics.deliveryByMonth : [{ label: 'Sin datos', value: '-' }]}
+                onClick={() => handleCardClick('delivery', 'Gastos de Delivery', 'cyan')}
               />
+              {/* COMENTADO: Tarjeta Puntos Acumulados
               <MetricCard
                 title="Puntos Acumulados"
                 value={metrics.totalPoints.toLocaleString()}
@@ -559,6 +603,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
                 hoverData={metrics.pointsByProduct.slice(0, 3)}
                 onClick={() => handleCardClick('inventory', 'Puntos por Producto', 'purple')}
               />
+              */}
               <MetricCard
                 title="Valor Prod. Gratis"
                 value={formatCLP(metrics.freeProductProfit)}

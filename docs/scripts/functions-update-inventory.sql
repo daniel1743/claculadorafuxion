@@ -19,18 +19,18 @@ DECLARE
 BEGIN
   -- Obtener product_id
   v_product_id := NEW.product_id;
-  
+
   -- Si no hay product_id, no podemos actualizar
   IF v_product_id IS NULL THEN
     RETURN NEW;
   END IF;
 
   -- Obtener estado actual del producto
-  SELECT 
+  SELECT
     current_stock_boxes,
     current_marketing_stock,
     sachets_per_box
-  INTO 
+  INTO
     v_current_boxes,
     v_current_sachets,
     v_sachets_per_box
@@ -62,7 +62,7 @@ BEGIN
         IF v_current_boxes >= NEW.quantity_boxes THEN
           v_current_boxes := v_current_boxes - NEW.quantity_boxes;
         ELSE
-          RAISE EXCEPTION 'Stock insuficiente: Se requieren % cajas, pero solo hay % disponibles', 
+          RAISE EXCEPTION 'Stock insuficiente: Se requieren % cajas, pero solo hay % disponibles',
             NEW.quantity_boxes, v_current_boxes;
         END IF;
       END IF;
@@ -74,10 +74,10 @@ BEGIN
           v_sachets_needed := NEW.quantity_sachets - v_current_sachets;
           -- Calcular cuántas cajas necesitamos abrir
           v_boxes_to_open := CEIL(v_sachets_needed::NUMERIC / v_sachets_per_box);
-          
+
           -- Verificar que hay suficientes cajas
           IF v_current_boxes < v_boxes_to_open THEN
-            RAISE EXCEPTION 'Stock insuficiente: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles', 
+            RAISE EXCEPTION 'Stock insuficiente: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles',
               NEW.quantity_sachets, v_current_sachets, v_current_boxes;
           END IF;
 
@@ -97,7 +97,7 @@ BEGIN
           v_current_boxes := v_current_boxes - NEW.quantity_boxes;
           v_current_sachets := v_current_sachets + (NEW.quantity_boxes * v_sachets_per_box);
         ELSE
-          RAISE EXCEPTION 'Stock insuficiente: Se intentan abrir % cajas, pero solo hay % disponibles', 
+          RAISE EXCEPTION 'Stock insuficiente: Se intentan abrir % cajas, pero solo hay % disponibles',
             NEW.quantity_boxes, v_current_boxes;
         END IF;
       END IF;
@@ -109,9 +109,9 @@ BEGIN
         IF v_current_sachets < NEW.quantity_sachets THEN
           v_sachets_needed := NEW.quantity_sachets - v_current_sachets;
           v_boxes_to_open := CEIL(v_sachets_needed::NUMERIC / v_sachets_per_box);
-          
+
           IF v_current_boxes < v_boxes_to_open THEN
-            RAISE EXCEPTION 'Stock insuficiente para muestras: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles', 
+            RAISE EXCEPTION 'Stock insuficiente para muestras: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles',
               NEW.quantity_sachets, v_current_sachets, v_current_boxes;
           END IF;
 
@@ -128,7 +128,7 @@ BEGIN
         IF v_current_boxes >= NEW.quantity_boxes THEN
           v_current_boxes := v_current_boxes - NEW.quantity_boxes;
         ELSE
-          RAISE EXCEPTION 'Stock insuficiente para consumo personal: Se requieren % cajas, pero solo hay % disponibles', 
+          RAISE EXCEPTION 'Stock insuficiente para consumo personal: Se requieren % cajas, pero solo hay % disponibles',
             NEW.quantity_boxes, v_current_boxes;
         END IF;
       END IF;
@@ -138,9 +138,9 @@ BEGIN
         IF v_current_sachets < NEW.quantity_sachets THEN
           v_sachets_needed := NEW.quantity_sachets - v_current_sachets;
           v_boxes_to_open := CEIL(v_sachets_needed::NUMERIC / v_sachets_per_box);
-          
+
           IF v_current_boxes < v_boxes_to_open THEN
-            RAISE EXCEPTION 'Stock insuficiente para consumo personal: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles', 
+            RAISE EXCEPTION 'Stock insuficiente para consumo personal: Se requieren % sobres, pero solo hay % sobres y % cajas disponibles',
               NEW.quantity_sachets, v_current_sachets, v_current_boxes;
           END IF;
 
@@ -166,7 +166,7 @@ BEGIN
 
   -- Actualizar el producto con el nuevo inventario
   UPDATE products
-  SET 
+  SET
     current_stock_boxes = v_current_boxes,
     current_marketing_stock = v_current_sachets,
     updated_at = NOW()
@@ -188,93 +188,11 @@ CREATE TRIGGER trigger_update_inventory_dual
   EXECUTE FUNCTION update_inventory_dual();
 
 -- ============================================
--- VERIFICACIÓN
+-- VERIFICACIÓN: Ejecuta esto para confirmar que el trigger está activo
 -- ============================================
--- Para probar, ejecuta estos pasos:
-
-/*
--- 1. Crear producto de prueba
-INSERT INTO products (user_id, name, list_price, sachets_per_box, current_stock_boxes)
-VALUES ('tu-user-id', 'Prunex Test', 10000, 28, 0);
-
--- 2. Obtener el ID
-SELECT id, name, current_stock_boxes, current_marketing_stock 
-FROM products 
-WHERE name = 'Prunex Test';
-
--- 3. Insertar compra (reemplaza product_id)
-INSERT INTO transactions (user_id, product_id, type, quantity_boxes, total_amount, unit_cost_snapshot)
-VALUES (
-  'tu-user-id',
-  'product-id-aqui',
-  'purchase',
-  5,  -- 5 cajas
-  50000,  -- $50,000
-  0
-);
-
--- 4. Verificar inventario actualizado
-SELECT name, current_stock_boxes, current_marketing_stock 
-FROM products 
-WHERE name = 'Prunex Test';
--- Debería mostrar: current_stock_boxes = 5
-
--- 5. Abrir 1 caja
-INSERT INTO transactions (user_id, product_id, type, quantity_boxes, total_amount, unit_cost_snapshot)
-VALUES (
-  'tu-user-id',
-  'product-id-aqui',
-  'box_opening',
-  1,  -- 1 caja
-  0,
-  0
-);
-
--- 6. Verificar que se abrió
-SELECT name, current_stock_boxes, current_marketing_stock 
-FROM products 
-WHERE name = 'Prunex Test';
--- Debería mostrar: current_stock_boxes = 4, current_marketing_stock = 28
-
--- 7. Dar 3 muestras
-INSERT INTO transactions (user_id, product_id, type, quantity_sachets, total_amount, unit_cost_snapshot)
-VALUES (
-  'tu-user-id',
-  'product-id-aqui',
-  'marketing_sample',
-  0,  -- 0 cajas
-  3,  -- 3 sobres (usando quantity_sachets)
-  0
-);
--- ERROR: quantity_sachets no es un campo válido en total_amount
--- CORRECCIÓN: Usar quantity_sachets correctamente
-
-INSERT INTO transactions (user_id, product_id, type, quantity_boxes, quantity_sachets, total_amount, unit_cost_snapshot)
-VALUES (
-  'tu-user-id',
-  'product-id-aqui',
-  'marketing_sample',
-  0,  -- 0 cajas
-  3,  -- 3 sobres
-  0,
-  0
-);
-
--- 8. Verificar muestras
-SELECT name, current_stock_boxes, current_marketing_stock 
-FROM products 
-WHERE name = 'Prunex Test';
--- Debería mostrar: current_stock_boxes = 4, current_marketing_stock = 25
-*/
-
--- ============================================
--- NOTAS IMPORTANTES:
--- ============================================
--- 1. Esta función se ejecuta DESPUÉS de insertar la transacción
--- 2. Actualiza automáticamente el inventario según el tipo
--- 3. Abre cajas automáticamente si faltan sobres
--- 4. Valida que haya suficiente stock antes de restar
--- 5. Lanza excepciones si no hay suficiente inventario
--- 6. Maneja conversiones automáticas (cajas → sobres)
--- ============================================
-
+SELECT
+  trigger_name,
+  event_manipulation,
+  action_timing
+FROM information_schema.triggers
+WHERE trigger_name = 'trigger_update_inventory_dual';

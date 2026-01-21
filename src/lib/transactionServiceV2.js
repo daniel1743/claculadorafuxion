@@ -115,18 +115,21 @@ export const addTransactionV2 = async (transaction) => {
     const finalNotes = notes || description || '';
 
     // Validar tipo de transacción
-    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening', 'loan_repayment', 'loan', 'advertising'];
+    const validTypes = ['purchase', 'sale', 'personal_consumption', 'marketing_sample', 'box_opening', 'loan_repayment', 'loan', 'advertising', 'outflow'];
     if (!validTypes.includes(type)) {
       throw new Error(`Tipo de transacción inválido: ${type}. Debe ser uno de: ${validTypes.join(', ')}`);
     }
 
-    // Para publicidad, no se requiere producto
+    // Para publicidad y outflow, no se requiere producto
     let productId = null;
 
-    if (type === 'advertising') {
-      // Advertising no requiere producto
+    if (type === 'advertising' || type === 'outflow') {
+      // Advertising y outflow no requieren producto obligatorio
       productId = null;
-    } else if (productName) {
+    }
+
+    // Si hay productName, buscar o crear el producto
+    if (productName) {
       // Obtener o crear el producto
       const { data: existingProduct, error: productError } = await getProductByName(user.id, productName);
 

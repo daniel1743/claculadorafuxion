@@ -54,11 +54,10 @@ export const calculateTotalStockEquivalent = (boxes, sachets, sachetsPerBox = 28
  * @returns {Object} { valid: boolean, message: string, canOpenBoxes: number }
  */
 export const validateStock = (product, requiredBoxes = 0, requiredSachets = 0) => {
-  const {
-    current_stock_boxes = 0,
-    current_marketing_stock = 0,
-    sachets_per_box = 28
-  } = product;
+  // Soportar ambos formatos: camelCase y snake_case
+  const current_stock_boxes = product.currentStockBoxes ?? product.current_stock_boxes ?? 0;
+  const current_marketing_stock = product.currentMarketingStock ?? product.current_marketing_stock ?? 0;
+  const sachets_per_box = product.sachetsPerBox ?? product.sachets_per_box ?? 28;
 
   let availableBoxes = current_stock_boxes;
   let availableSachets = current_marketing_stock;
@@ -111,10 +110,9 @@ export const calculateOpenableBoxes = (product, minBoxesToKeep = 0) => {
  * @returns {string} String formateado (ej: "5 cajas + 12 sobres")
  */
 export const formatInventory = (product) => {
-  const {
-    current_stock_boxes = 0,
-    current_marketing_stock = 0
-  } = product;
+  // Soportar ambos formatos: camelCase y snake_case
+  const current_stock_boxes = product.currentStockBoxes ?? product.current_stock_boxes ?? 0;
+  const current_marketing_stock = product.currentMarketingStock ?? product.current_marketing_stock ?? 0;
 
   const boxes = parseInt(current_stock_boxes) || 0;
   const sachets = parseInt(current_marketing_stock) || 0;
@@ -140,11 +138,10 @@ export const formatInventory = (product) => {
  * @returns {string} String formateado (ej: "5.43 cajas")
  */
 export const formatTotalStockEquivalent = (product) => {
-  const {
-    current_stock_boxes = 0,
-    current_marketing_stock = 0,
-    sachets_per_box = 28
-  } = product;
+  // Soportar ambos formatos: camelCase y snake_case
+  const current_stock_boxes = product.currentStockBoxes ?? product.current_stock_boxes ?? 0;
+  const current_marketing_stock = product.currentMarketingStock ?? product.current_marketing_stock ?? 0;
+  const sachets_per_box = product.sachetsPerBox ?? product.sachets_per_box ?? 28;
 
   const total = calculateTotalStockEquivalent(
     parseInt(current_stock_boxes) || 0,

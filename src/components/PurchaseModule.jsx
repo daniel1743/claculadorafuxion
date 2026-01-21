@@ -198,25 +198,42 @@ const PurchaseModule = ({ onAdd, prices = {}, products = [] }) => {
     try {
       let transactionsToAdd = [];
 
-      // Registrar cada item del carrito (uno por producto)
+      // Registrar cada item del carrito (uno por producto) - SIN incluir delivery en el precio
       for (let i = 0; i < workingCart.length; i++) {
         const item = workingCart[i];
         const totalItem = item.unitPrice * item.quantity;
-        // Delivery se cobra completo y solo una vez (primer item)
-        const totalWithDelivery = totalItem + (includeDelivery && i === 0 ? deliveryPrice : 0);
 
         const result = await addTransactionV2({
           type: 'purchase',
           productName: item.productName,
           quantityBoxes: item.quantity,
           quantitySachets: 0,
-          totalAmount: totalWithDelivery,
-          notes: `${includeDelivery && i === 0 ? 'Incluye delivery | ' : ''}${formData.description || ''}`.trim(),
+          totalAmount: totalItem, // Solo precio del producto, SIN delivery
+          notes: formData.description || '',
           listPrice: item.unitPrice
         });
 
         if (result.error) throw result.error;
         if (result.data) transactionsToAdd.push(result.data);
+      }
+
+      // Registrar delivery como transacción SEPARADA (tipo outflow con notas de delivery)
+      if (includeDelivery && deliveryPrice > 0) {
+        const deliveryResult = await addTransactionV2({
+          type: 'outflow',
+          productName: null,
+          quantityBoxes: 0,
+          quantitySachets: 0,
+          totalAmount: deliveryPrice,
+          notes: 'Delivery - Envío de compra',
+          listPrice: 0
+        });
+
+        if (deliveryResult.error) {
+          console.warn('Error registrando delivery:', deliveryResult.error);
+        } else if (deliveryResult.data) {
+          transactionsToAdd.push(deliveryResult.data);
+        }
       }
 
       // Regalos (si hay)

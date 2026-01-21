@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
@@ -606,6 +606,61 @@ Ver consola para más detalles (F12)
     }
   };
 
+  // Sincronizar precios desde productos (fuente de verdad)
+  const handleSyncPrices = async () => {
+    if (!user) return;
+    try {
+      // 1. Recargar productos desde BD (fuente de verdad para precios)
+      const { data: freshProducts, error: productsError } = await getUserProductsWithInventory(user.id);
+
+      if (productsError) throw productsError;
+
+      if (freshProducts && freshProducts.length > 0) {
+        // 2. Extraer precios de lista de cada producto
+        const syncedPrices = {};
+        freshProducts.forEach(p => {
+          if (p.name && p.listPrice > 0) {
+            syncedPrices[p.name] = p.listPrice;
+          }
+        });
+
+        // 3. Actualizar estado de precios (reemplazar completamente)
+        setPrices(syncedPrices);
+        setProducts(freshProducts);
+
+        // 4. Reconstruir inventoryMap con stock actual
+        const freshInventoryMap = {};
+        freshProducts.forEach(p => {
+          const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+          freshInventoryMap[p.name] = stock;
+        });
+        setInventoryMap(freshInventoryMap);
+
+        console.log('[handleSyncPrices] Precios sincronizados:', syncedPrices);
+        console.log('[handleSyncPrices] Productos:', freshProducts.length);
+
+        toast({
+          title: "Precios Sincronizados",
+          description: `${Object.keys(syncedPrices).length} precios actualizados desde Gestión de Precios.`,
+          className: "bg-blue-900 border-blue-600 text-white"
+        });
+      } else {
+        toast({
+          title: "Sin productos",
+          description: "No hay productos registrados para sincronizar precios.",
+          className: "bg-yellow-900 border-yellow-600 text-white"
+        });
+      }
+    } catch (error) {
+      console.error('Error sincronizando precios:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron sincronizar los precios.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Editar monto de publicidad (IVA, comisiones bancarias)
   const handleEditAdAmount = async (id, newAmount) => {
     if (!user) return;
@@ -1027,15 +1082,26 @@ Ver consola para más detalles (F12)
                         <Receipt className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                         Gestión de Operaciones
                       </h2>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="bg-yellow-500/10 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 text-xs gap-2 w-fit sm:w-auto"
-                        onClick={handleSyncInventory}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Sincronizar Inventario Real
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-yellow-500/10 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 text-xs gap-2 w-fit"
+                          onClick={handleSyncInventory}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Sincronizar Inventario
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs gap-2 w-fit"
+                          onClick={handleSyncPrices}
+                        >
+                          <DollarSign className="h-3.5 w-3.5" />
+                          Sincronizar Precios
+                        </Button>
+                      </div>
                     </div>
                     {/* Contenedor scrollable para tabs en móvil */}
                     <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent pb-2 -mb-2">
