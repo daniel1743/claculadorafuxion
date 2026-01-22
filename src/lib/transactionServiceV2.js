@@ -371,3 +371,98 @@ export const updateTransactionV2 = async (transactionId, updates) => {
   }
 };
 
+/**
+ * Actualiza una transacción de consumo personal y ajusta el inventario automáticamente
+ * @param {string} transactionId - ID de la transacción
+ * @param {number} newQuantityBoxes - Nueva cantidad de cajas
+ * @param {number} newQuantitySachets - Nueva cantidad de sobres
+ * @returns {Promise<{data: Object|null, error: Error|null, inventoryAdjustment: Object}>}
+ */
+export const updatePersonalConsumption = async (transactionId, newQuantityBoxes, newQuantitySachets = 0) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuario no autenticado');
+
+    // 1. Obtener la transacción actual
+    const { data: currentTx, error: fetchError } = await supabase
+      .from('transactions')
+      .select('*, products(id, name, current_stock_boxes, current_marketing_stock)')
+      .eq('id', transactionId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!currentTx) throw new Error('Transacción no encontrada');
+
+    // Validar que sea consumo personal
+    if (currentTx.type !== 'personal_consumption') {
+      throw new Error('Solo se pueden editar transacciones de consumo personal');
+    }
+
+    const oldBoxes = parseInt(currentTx.quantity_boxes) || 0;
+    const oldSachets = parseInt(currentTx.quantity_sachets) || 0;
+    const newBoxes = parseInt(newQuantityBoxes) || 0;
+    const newSachets = parseInt(newQuantitySachets) || 0;
+
+    // 2. Calcular diferencias
+    // Diferencia positiva = devolver al inventario (consumí menos de lo que dije)
+    // Diferencia negativa = descontar del inventario (consumí más de lo que dije)
+    const boxesDiff = oldBoxes - newBoxes;
+    const sachetsDiff = oldSachets - newSachets;
+
+    // 3. Actualizar la transacción
+    const { data: updatedTx, error: updateError } = await supabase
+      .from('transactions')
+      .update({
+        quantity_boxes: newBoxes,
+        quantity_sachets: newSachets,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', transactionId)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 4. Ajustar el inventario del producto
+    if (currentTx.product_id && (boxesDiff !== 0 || sachetsDiff !== 0)) {
+      const currentStock = currentTx.products?.current_stock_boxes || 0;
+      const currentSachets = currentTx.products?.current_marketing_stock || 0;
+
+      // Nuevo stock = stock actual + diferencia
+      // Si boxesDiff > 0: devolvemos cajas (stock aumenta)
+      // Si boxesDiff < 0: descontamos cajas (stock disminuye)
+      const newStock = Math.max(0, currentStock + boxesDiff);
+      const newSachetStock = Math.max(0, currentSachets + sachetsDiff);
+
+      const { error: inventoryError } = await supabase
+        .from('products')
+        .update({
+          current_stock_boxes: newStock,
+          current_marketing_stock: newSachetStock,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentTx.product_id);
+
+      if (inventoryError) {
+        console.error('Error ajustando inventario:', inventoryError);
+        // No lanzamos error aquí para no perder la actualización de la transacción
+      }
+    }
+
+    return {
+      data: updatedTx,
+      error: null,
+      inventoryAdjustment: {
+        boxesDiff,
+        sachetsDiff,
+        action: boxesDiff > 0 ? 'devuelto' : boxesDiff < 0 ? 'descontado' : 'sin cambio'
+      }
+    };
+  } catch (error) {
+    console.error('Error en updatePersonalConsumption:', error);
+    return { data: null, error, inventoryAdjustment: null };
+  }
+};
+

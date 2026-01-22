@@ -133,6 +133,10 @@ const DataTable = ({ transactions, onDelete, onDeleteMultiple, onEditAmount, typ
       if (typeFilter === 'venta' || typeFilter === 'sale') {
         return t.type === 'venta' || t.type === 'sale';
       }
+      // Para salidas (consumo personal, muestras, etc.)
+      if (typeFilter === 'salidas' || typeFilter === 'exits') {
+        return t.type === 'personal_consumption' || t.type === 'marketing_sample' || t.type === 'box_opening';
+      }
       return t.type === typeFilter;
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date));

@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,10 +7,100 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock, Pencil, Check, X, ExternalLink } from 'lucide-react';
 import { formatCLP } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
+import { updatePersonalConsumption } from '@/lib/transactionServiceV2';
 
-const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [], products = [], inventoryMap = {} }) => {
+const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [], products = [], inventoryMap = {}, onTransactionUpdate }) => {
+  const { toast } = useToast();
+  const [editingId, setEditingId] = useState(null);
+  const [editBoxes, setEditBoxes] = useState('');
+  const [editSachets, setEditSachets] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Iniciar edición de una transacción
+  const startEdit = (tx) => {
+    setEditingId(tx.id);
+    setEditBoxes(tx.quantityBoxes || 0);
+    setEditSachets(tx.quantitySachets || 0);
+  };
+
+  // Cancelar edición
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditBoxes('');
+    setEditSachets('');
+  };
+
+  // Guardar edición
+  const saveEdit = async (tx) => {
+    const newBoxes = parseInt(editBoxes) || 0;
+    const newSachets = parseInt(editSachets) || 0;
+
+    if (newBoxes < 0 || newSachets < 0) {
+      toast({
+        title: "Error",
+        description: "Las cantidades no pueden ser negativas.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (newBoxes === 0 && newSachets === 0) {
+      toast({
+        title: "Error",
+        description: "Debe haber al menos 1 caja o sobre.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const { data, error, inventoryAdjustment } = await updatePersonalConsumption(
+        tx.id,
+        newBoxes,
+        newSachets
+      );
+
+      if (error) throw error;
+
+      // Mensaje según el ajuste de inventario
+      let description = "Consumo actualizado correctamente.";
+      if (inventoryAdjustment) {
+        if (inventoryAdjustment.boxesDiff > 0) {
+          description = `Se devolvieron ${inventoryAdjustment.boxesDiff} caja(s) al inventario.`;
+        } else if (inventoryAdjustment.boxesDiff < 0) {
+          description = `Se descontaron ${Math.abs(inventoryAdjustment.boxesDiff)} caja(s) del inventario.`;
+        }
+      }
+
+      toast({
+        title: "Actualizado",
+        description,
+        className: "bg-green-900 border-green-600 text-white"
+      });
+
+      cancelEdit();
+
+      // Notificar al padre para recargar datos
+      if (onTransactionUpdate) {
+        onTransactionUpdate();
+      }
+    } catch (error) {
+      console.error('Error actualizando consumo:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar el consumo.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const modalData = useMemo(() => {
     if (!transactions && !products) return { rows: [], summary: {} };
@@ -146,34 +236,31 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
         summary = { totalProducts: rows.length, totalBoxes, totalValue };
     }
     else if (type === 'personal_consumption') {
-        // Agregar consumo personal y muestras por producto
-        const consumptionMap = {};
+        // Mostrar transacciones individuales de consumo personal (editables)
         let totalMarketingSamples = 0;
+        let totalBoxes = 0;
+        let totalSachets = 0;
 
         transactions.forEach(t => {
             if (t.type === 'personal_consumption') {
-                const key = t.productName;
-                if (!consumptionMap[key]) {
-                    consumptionMap[key] = {
-                        productName: key,
-                        totalBoxes: 0,
-                        totalSachets: 0,
-                        lastDate: t.date
-                    };
-                }
-                consumptionMap[key].totalBoxes += t.quantityBoxes || 0;
-                consumptionMap[key].totalSachets += t.quantitySachets || 0;
-                if (new Date(t.date) > new Date(consumptionMap[key].lastDate)) {
-                    consumptionMap[key].lastDate = t.date;
-                }
+                rows.push({
+                    id: t.id,
+                    productName: t.productName,
+                    quantityBoxes: t.quantityBoxes || 0,
+                    quantitySachets: t.quantitySachets || 0,
+                    date: t.date,
+                    notes: t.notes || ''
+                });
+                totalBoxes += t.quantityBoxes || 0;
+                totalSachets += t.quantitySachets || 0;
             } else if (t.type === 'marketing_sample') {
                 totalMarketingSamples += t.quantitySachets || 0;
             }
         });
 
-        rows = Object.values(consumptionMap);
-        const totalBoxes = rows.reduce((a, b) => a + b.totalBoxes, 0);
-        const totalSachets = rows.reduce((a, b) => a + b.totalSachets, 0);
+        // Ordenar por fecha descendente
+        rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+
         summary = { totalProducts: rows.length, totalBoxes, totalSachets, totalMarketingSamples };
     }
 
@@ -182,7 +269,22 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col bg-gray-900/95 border-white/10">
+      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col bg-gray-900/95 border-white/10 p-0 overflow-hidden">
+        {/* Banner Telegram */}
+        <a
+          href="https://t.me/+Rayp5VZ2shM2ODBh"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 hover:from-blue-500 hover:via-cyan-400 hover:to-blue-500 transition-all flex-shrink-0"
+        >
+          <span className="font-bold text-sm">MEJOR GRUPO DE CUADRE Y GUEBEO CHILE</span>
+          <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+            UNETE GRATIS
+            <ExternalLink className="w-3 h-3" />
+          </span>
+        </a>
+
+        <div className="p-6 flex flex-col flex-1 overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-2">
              <span className={`w-3 h-8 rounded-full bg-${color}-500`}></span>
@@ -235,7 +337,7 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                 {type === 'personal_consumption' && (
                     <>
                         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <div className="text-xs text-gray-400 uppercase">Productos Consumidos</div>
+                            <div className="text-xs text-gray-400 uppercase">Registros</div>
                             <div className="text-2xl font-bold text-white">{modalData.summary.totalProducts || 0}</div>
                         </div>
                         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
@@ -292,10 +394,11 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                         )}
                         {type === 'personal_consumption' && (
                              <>
-                                <th className="px-4 py-3 rounded-tl-lg">Producto</th>
+                                <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
+                                <th className="px-4 py-3">Producto</th>
                                 <th className="px-4 py-3 text-right">Cajas</th>
                                 <th className="px-4 py-3 text-right">Sobres</th>
-                                <th className="px-4 py-3 text-right rounded-tr-lg">Último Consumo</th>
+                                <th className="px-4 py-3 text-center rounded-tr-lg">Editar</th>
                             </>
                         )}
                     </tr>
@@ -361,15 +464,72 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                             )}
                             {type === 'personal_consumption' && (
                                 <>
+                                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">
+                                        {row.date ? new Date(row.date).toLocaleDateString() : '-'}
+                                    </td>
                                     <td className="px-4 py-3 font-medium text-white">{row.productName}</td>
-                                    <td className="px-4 py-3 text-right text-violet-400 font-mono font-bold">
-                                        {row.totalBoxes > 0 ? row.totalBoxes : '-'}
+                                    <td className="px-4 py-3 text-right">
+                                        {editingId === row.id ? (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={editBoxes}
+                                                onChange={(e) => setEditBoxes(e.target.value)}
+                                                className="w-16 bg-black/40 border border-violet-500/50 rounded px-2 py-1 text-violet-400 font-mono text-right focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                                            />
+                                        ) : (
+                                            <span className="text-violet-400 font-mono font-bold">
+                                                {row.quantityBoxes > 0 ? row.quantityBoxes : '-'}
+                                            </span>
+                                        )}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-violet-300 font-mono">
-                                        {row.totalSachets > 0 ? row.totalSachets : '-'}
+                                    <td className="px-4 py-3 text-right">
+                                        {editingId === row.id ? (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={editSachets}
+                                                onChange={(e) => setEditSachets(e.target.value)}
+                                                className="w-16 bg-black/40 border border-violet-500/50 rounded px-2 py-1 text-violet-300 font-mono text-right focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                                            />
+                                        ) : (
+                                            <span className="text-violet-300 font-mono">
+                                                {row.quantitySachets > 0 ? row.quantitySachets : '-'}
+                                            </span>
+                                        )}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-gray-500 text-xs">
-                                        {row.lastDate ? new Date(row.lastDate).toLocaleDateString() : '-'}
+                                    <td className="px-4 py-3 text-center">
+                                        {editingId === row.id ? (
+                                            <div className="flex items-center justify-center gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => saveEdit(row)}
+                                                    disabled={isSaving}
+                                                    className="h-7 w-7 p-0 bg-green-600 hover:bg-green-500"
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={cancelEdit}
+                                                    disabled={isSaving}
+                                                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-400"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => startEdit(row)}
+                                                className="h-7 w-7 p-0 text-gray-400 hover:text-violet-400 hover:bg-violet-500/10"
+                                                title="Editar cantidades"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+                                        )}
                                     </td>
                                 </>
                             )}
@@ -377,6 +537,7 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                     ))}
                 </tbody>
             </table>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

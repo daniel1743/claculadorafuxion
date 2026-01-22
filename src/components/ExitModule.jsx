@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Tag, Hash, FileText, Package, Box, Gift, User } from 'lucide-react';
+import { Plus, Tag, Hash, FileText, Package, Gift, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductAutocomplete from '@/components/ui/ProductAutocomplete';
@@ -66,16 +66,7 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
       return;
     }
 
-    if (exitType === 'box_opening') {
-      if (quantityBoxes <= 0) {
-        toast({
-          title: "Cantidad Inválida",
-          description: "Debes especificar cuántas cajas abrir.",
-          variant: "destructive"
-        });
-        return;
-      }
-    } else if (exitType === 'marketing_sample') {
+    if (exitType === 'marketing_sample') {
       if (quantitySachets <= 0) {
         toast({
           title: "Cantidad Inválida",
@@ -128,8 +119,7 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
 
       const typeNames = {
         personal_consumption: 'Consumo Personal',
-        marketing_sample: 'Muestra/Regalo',
-        box_opening: 'Apertura de Caja'
+        marketing_sample: 'Muestra/Regalo'
       };
 
       toast({
@@ -178,7 +168,7 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
           <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
             Tipo de Transacción *
           </label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => setExitType('personal_consumption')}
@@ -203,18 +193,6 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
               <Gift className="w-4 h-4 mx-auto mb-1" />
               <span className="text-[11px] font-semibold block">Muestra / Regalo</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setExitType('box_opening')}
-              className={`p-3 rounded-xl border transition-all text-center whitespace-normal leading-tight ${
-                exitType === 'box_opening'
-                  ? 'bg-orange-600 border-orange-500 text-white'
-                  : 'bg-black/20 border-white/10 text-gray-400 hover:border-orange-500/50'
-              }`}
-            >
-              <Box className="w-4 h-4 mx-auto mb-1" />
-              <span className="text-[11px] font-semibold block">Abrir caja</span>
-            </button>
           </div>
         </div>
 
@@ -238,29 +216,7 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
         </div>
 
         {/* Cantidades - Depende del tipo */}
-        {exitType === 'box_opening' ? (
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
-              Cajas a Abrir *
-            </label>
-            <div className="relative group">
-              <Box className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-orange-400 transition-colors" />
-              <input
-                type="number"
-                min="1"
-                value={formData.quantityBoxes}
-                onChange={(e) => setFormData({...formData, quantityBoxes: e.target.value, quantitySachets: ''})}
-                className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/50 outline-none transition-all placeholder-gray-700"
-                placeholder="0"
-              />
-            </div>
-            {productInventory && formData.quantityBoxes && (
-              <p className="text-xs text-gray-400 pl-1">
-                Se convertirán {formData.quantityBoxes} cajas → {parseInt(formData.quantityBoxes) * (productInventory.sachetsPerBox || 28)} sobres
-              </p>
-            )}
-          </div>
-        ) : exitType === 'marketing_sample' ? (
+        {exitType === 'marketing_sample' ? (
           <div className="space-y-2">
             <label className="text-xs uppercase tracking-wider text-gray-500 font-bold pl-1">
               Sobres de Muestra *
@@ -332,29 +288,22 @@ const ExitModule = ({ onAdd, campaigns = [], prices = {}, products = [] }) => {
 
         {/* Stock Disponible */}
         <div className={`rounded-xl p-4 border flex justify-between items-center ${
-          exitType === 'sale' ? 'bg-green-500/5 border-green-500/10' :
           exitType === 'personal_consumption' ? 'bg-purple-500/5 border-purple-500/10' :
-          exitType === 'marketing_sample' ? 'bg-yellow-500/5 border-yellow-500/10' :
-          'bg-orange-500/5 border-orange-500/10'
+          'bg-yellow-500/5 border-yellow-500/10'
         }`}>
           <span className="text-xs text-gray-400">Stock Disponible</span>
           <span className="text-sm font-bold text-blue-400">{getCurrentStock()}</span>
         </div>
 
-        <Button 
+        <Button
           type="submit"
           className={`w-full h-12 rounded-xl font-semibold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
-            exitType === 'sale' ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-900/20' :
             exitType === 'personal_consumption' ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-900/20' :
-            exitType === 'marketing_sample' ? 'bg-yellow-600 hover:bg-yellow-700 text-black shadow-yellow-900/20' :
-            'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-900/20'
+            'bg-yellow-600 hover:bg-yellow-700 text-black shadow-yellow-900/20'
           }`}
         >
           <Plus className="w-5 h-5 mr-2" />
-          {exitType === 'sale' ? 'Registrar Venta' :
-           exitType === 'personal_consumption' ? 'Registrar Consumo' :
-           exitType === 'marketing_sample' ? 'Registrar Muestra' :
-           'Abrir Caja'}
+          {exitType === 'personal_consumption' ? 'Registrar Consumo' : 'Registrar Muestra'}
         </Button>
       </form>
     </motion.div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Bot, MessageCircle, Lightbulb, ChevronRight, Sparkles, BookOpen, HelpCircle } from 'lucide-react';
+import { X, Send, Bot, MessageCircle, Lightbulb, ChevronRight, Sparkles, BookOpen, HelpCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getBestAnswer, getAnswerById, getRelatedAnswers } from '@/lib/helpBotEngine';
 import { QUICK_QUESTIONS, CATEGORIES, FALLBACK_RESPONSE } from '@/lib/helpBotKnowledge';
@@ -142,6 +142,20 @@ const HelpBotModal = ({ isOpen, onClose }) => {
           className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-950 border border-white/10 rounded-3xl w-full max-w-2xl h-[85vh] max-h-[700px] overflow-hidden shadow-2xl flex flex-col"
           onClick={e => e.stopPropagation()}
         >
+          {/* Banner Telegram */}
+          <a
+            href="https://t.me/+Rayp5VZ2shM2ODBh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 hover:from-blue-500 hover:via-cyan-400 hover:to-blue-500 transition-all"
+          >
+            <span className="font-bold text-sm">MEJOR GRUPO DE CUADRE Y GUEBEO CHILE</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+              UNETE GRATIS
+              <ExternalLink className="w-3 h-3" />
+            </span>
+          </a>
+
           {/* Header */}
           <div className="bg-gradient-to-r from-purple-600/20 via-blue-600/10 to-cyan-600/20 border-b border-white/10 p-4 sm:p-5">
             <div className="flex items-start justify-between">

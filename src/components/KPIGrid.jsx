@@ -7,7 +7,7 @@ import KPIModal from '@/components/KPIModal';
 import { formatCLP } from '@/lib/utils';
 import { calculateTotalProfit } from '@/lib/accountingUtils';
 
-const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [], fuxionPayments = 0, onEstadoNegocioClick }) => {
+const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [], loans = [], fuxionPayments = 0, onEstadoNegocioClick, onTransactionUpdate }) => {
   console.log('[KPIGrid] Renderizando con:', {
     transactions: transactions?.length || 0,
     inventory,
@@ -669,6 +669,7 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         products={products}
         loans={loans}
         inventoryMap={inventoryMap}
+        onTransactionUpdate={onTransactionUpdate}
       />
     </>
   );

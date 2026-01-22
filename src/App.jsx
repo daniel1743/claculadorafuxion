@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw, DollarSign, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
@@ -33,6 +33,8 @@ import ErrorDebugger from '@/components/ErrorDebugger';
 import HistoryCard from '@/components/HistoryCard';
 import CustomerManagement from '@/components/CustomerManagement';
 import RemindersCard from '@/components/RemindersCard';
+import ReminderModule from '@/components/ReminderModule';
+import useReminderNotifications from '@/hooks/useReminderNotifications';
 import FuxionPaymentsModule from '@/components/FuxionPaymentsModule';
 import EstadoDelNegocioModal from '@/components/EstadoDelNegocioModal';
 import HelpBotModal from '@/components/HelpBotModal';
@@ -40,6 +42,7 @@ import HeroKpiCarousel from '@/components/HeroKpiCarousel';
 import DailyQuote from '@/components/DailyQuote';
 import NotificationBell from '@/components/NotificationBell';
 import SuggestionForm from '@/components/SuggestionForm';
+import TelegramBanner from '@/components/TelegramBanner';
 import { createWelcomeNotification } from '@/lib/notificationService';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
@@ -71,6 +74,10 @@ function App() {
   const [subscription, setSubscription] = useState(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [totalFuxionPayments, setTotalFuxionPayments] = useState(0);
+  const [unreadRemindersCount, setUnreadRemindersCount] = useState(0);
+
+  // Hook para notificaciones de recordatorios
+  useReminderNotifications(setUnreadRemindersCount);
 
   // Estados para personalización del perfil (localStorage)
   const [dashboardTitle, setDashboardTitle] = useState('Mi Dashboard FuXion');
@@ -950,6 +957,7 @@ Ver consola para más detalles (F12)
 
           <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white font-sans selection:bg-yellow-500/30">
             <Toaster />
+            <TelegramBanner />
             <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
 
         {console.log('[App] 🎨 RENDER - authModalOpen:', authModalOpen, 'user:', !!user, 'loading:', loading, 'MODAL DEBE MOSTRARSE:', authModalOpen && !user)}
@@ -1070,6 +1078,7 @@ Ver consola para más detalles (F12)
                   loans={loans}
                   fuxionPayments={totalFuxionPayments}
                   onEstadoNegocioClick={() => setShowEstadoNegocio(true)}
+                  onTransactionUpdate={() => user && loadUserData(user.id)}
                 />
             </section>
 
@@ -1130,6 +1139,15 @@ Ver consola para más detalles (F12)
                       <TabsTrigger value="pagos-fuxion" className="rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap">
                           Pagos FuXion
                       </TabsTrigger>
+                      <TabsTrigger value="recordatorios" className="rounded-lg data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400 px-3 sm:px-6 py-2 text-xs sm:text-sm transition-all whitespace-nowrap relative">
+                          <Bell className="w-4 h-4 mr-1 inline" />
+                          Recordatorios
+                          {unreadRemindersCount > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                              {unreadRemindersCount > 9 ? '9+' : unreadRemindersCount}
+                            </span>
+                          )}
+                      </TabsTrigger>
                       </TabsList>
                     </div>
                 </div>
@@ -1189,7 +1207,7 @@ Ver consola para más detalles (F12)
                             />
                         </div>
                         <div className="lg:col-span-2">
-                            <DataTable typeFilter="sale" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Salidas" icon={Receipt} color="blue" />
+                            <DataTable typeFilter="salidas" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Salidas" icon={Receipt} color="blue" />
                         </div>
                     </div>
                     </TabsContent>
@@ -1323,6 +1341,14 @@ Ver consola para más detalles (F12)
                             <li>• Estos pagos <strong>suman a tu Ganancia Neta</strong> en el dashboard</li>
                           </ul>
                         </div>
+                    </TabsContent>
+
+                    <TabsContent value="recordatorios" className="mt-0 focus-visible:outline-none">
+                        <ReminderModule
+                          products={products}
+                          prices={prices}
+                          onUnreadCountChange={setUnreadRemindersCount}
+                        />
                     </TabsContent>
                 </div>
                 </Tabs>
