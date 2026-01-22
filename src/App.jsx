@@ -42,7 +42,6 @@ import HeroKpiCarousel from '@/components/HeroKpiCarousel';
 import DailyQuote from '@/components/DailyQuote';
 import NotificationBell from '@/components/NotificationBell';
 import SuggestionForm from '@/components/SuggestionForm';
-import TelegramBanner from '@/components/TelegramBanner';
 import { createWelcomeNotification } from '@/lib/notificationService';
 import CyclesHistoryView from '@/components/CyclesHistoryView';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
@@ -957,7 +956,6 @@ Ver consola para más detalles (F12)
 
           <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white font-sans selection:bg-yellow-500/30">
             <Toaster />
-            <TelegramBanner />
             <AuthModal isOpen={authModalOpen && !user} onLogin={handleLogin} />
 
         {console.log('[App] 🎨 RENDER - authModalOpen:', authModalOpen, 'user:', !!user, 'loading:', loading, 'MODAL DEBE MOSTRARSE:', authModalOpen && !user)}

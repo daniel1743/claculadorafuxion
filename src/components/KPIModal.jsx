@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock, Pencil, Check, X, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Calendar, Package, DollarSign, Target, Clock, Pencil, Check, X } from 'lucide-react';
 import { formatCLP } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -269,22 +269,7 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col bg-gray-900/95 border-white/10 p-0 overflow-hidden">
-        {/* Banner Telegram */}
-        <a
-          href="https://t.me/+Rayp5VZ2shM2ODBh"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 hover:from-blue-500 hover:via-cyan-400 hover:to-blue-500 transition-all flex-shrink-0"
-        >
-          <span className="font-bold text-sm">MEJOR GRUPO DE CUADRE Y GUEBEO CHILE</span>
-          <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
-            UNETE GRATIS
-            <ExternalLink className="w-3 h-3" />
-          </span>
-        </a>
-
-        <div className="p-6 flex flex-col flex-1 overflow-hidden">
+      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col bg-gray-900/95 border-white/10">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-2">
              <span className={`w-3 h-8 rounded-full bg-${color}-500`}></span>
@@ -537,7 +522,6 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                     ))}
                 </tbody>
             </table>
-        </div>
         </div>
       </DialogContent>
     </Dialog>

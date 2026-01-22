@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, X, CheckCircle, AlertCircle, TrendingUp, ExternalLink } from 'lucide-react';
+import { HelpCircle, X, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -34,22 +34,7 @@ const HelpPanel = ({ isOpen, onClose, helpContent }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-gray-900/98 border-yellow-500/20 p-0">
-        {/* Banner Telegram */}
-        <a
-          href="https://t.me/+Rayp5VZ2shM2ODBh"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 hover:from-blue-500 hover:via-cyan-400 hover:to-blue-500 transition-all rounded-t-lg"
-        >
-          <span className="font-bold text-sm">MEJOR GRUPO DE CUADRE Y GUEBEO CHILE</span>
-          <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
-            UNETE GRATIS
-            <ExternalLink className="w-3 h-3" />
-          </span>
-        </a>
-
-        <div className="p-6">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-gray-900/98 border-yellow-500/20">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-3 text-yellow-400">
             <HelpCircle className="w-7 h-7" />
@@ -129,7 +114,6 @@ const HelpPanel = ({ isOpen, onClose, helpContent }) => {
           >
             Entendido
           </Button>
-        </div>
         </div>
       </DialogContent>
     </Dialog>
