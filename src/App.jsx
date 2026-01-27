@@ -2,12 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
+
+// ✅ CONFIRMACIÓN: ESTÁS EN EL PROYECTO CORRECTO
+console.log('%c🎯 PROYECTO CORRECTO: PAGINA REGISTRO GASTOS FUXION (Desktop)', 'background: #00ff00; color: #000; font-size: 20px; padding: 10px;');
+console.log('%c📁 Ubicación: Desktop/proyectos desplegados importante/', 'background: #00ff00; color: #000; font-size: 14px; padding: 5px;');
 import { LayoutDashboard, Receipt, Megaphone, ShoppingCart, HandCoins, Shield, Users, Banknote, RefreshCw, DollarSign, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PurchaseModule from '@/components/PurchaseModule';
 import ShoppingCartModule from '@/components/ShoppingCartModule';
 import AdModule from '@/components/AdModule';
 import SalesModule from '@/components/SalesModuleWithCart';
+import SalesModuleCards from '@/components/SalesModuleCards';
+import PurchaseModuleCards from '@/components/PurchaseModuleCards';
+import ExitModuleCards from '@/components/ExitModuleCards';
 import ExitModule from '@/components/ExitModule';
 import BoxOpeningModule from '@/components/BoxOpeningModule';
 import LoanModule from '@/components/LoanModule';
@@ -68,6 +75,9 @@ function App() {
   const [showHelpBot, setShowHelpBot] = useState(false);
   const [showSuggestionForm, setShowSuggestionForm] = useState(false);
   const [cycleRefreshTrigger, setCycleRefreshTrigger] = useState(0);
+  const [salesViewMode, setSalesViewMode] = useState('cards'); // 'cards' | 'form'
+  const [purchaseViewMode, setPurchaseViewMode] = useState('cards'); // 'cards' | 'form'
+  const [exitViewMode, setExitViewMode] = useState('cards'); // 'cards' | 'form'
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [debugMinimized, setDebugMinimized] = useState(false);
   const [subscription, setSubscription] = useState(null);
@@ -323,21 +333,24 @@ Ver consola para más detalles (F12)
     };
   }, []); // Dependencias vacías para que solo se ejecute una vez
 
+  // Función para recargar productos (accesible desde cualquier parte del componente)
+  const reloadProducts = async () => {
+    if (!user) return;
+    const { data } = await getUserProductsWithInventory(user.id);
+    if (data) {
+      setProducts(data);
+      const mapFromProducts = {};
+      data.forEach(p => {
+        const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
+        mapFromProducts[p.name] = stock;
+      });
+      setInventoryMap(mapFromProducts);
+    }
+  };
+
   // Recargar productos cuando cambian las transacciones
   useEffect(() => {
     if (user) {
-      const reloadProducts = async () => {
-        const { data } = await getUserProductsWithInventory(user.id);
-        if (data) {
-          setProducts(data);
-          const mapFromProducts = {};
-          data.forEach(p => {
-            const stock = parseInt(p.current_stock_boxes ?? p.currentStockBoxes ?? 0) || 0;
-            mapFromProducts[p.name] = stock;
-          });
-          setInventoryMap(mapFromProducts);
-        }
-      };
       reloadProducts();
     }
   }, [transactions.length, user]);
@@ -1152,7 +1165,49 @@ Ver consola para más detalles (F12)
 
                 <div className="p-3 sm:p-6 md:p-8 bg-gradient-to-b from-gray-900/0 to-gray-900/20">
                     <TabsContent value="compras" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+                    {/* Toggle modo tarjetas vs formulario */}
+                    <div className="flex items-center justify-end gap-2 mb-4">
+                      <span className="text-xs text-gray-500">Modo:</span>
+                      <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
+                        <button
+                          onClick={() => setPurchaseViewMode('cards')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            purchaseViewMode === 'cards'
+                              ? 'bg-red-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Tarjetas
+                        </button>
+                        <button
+                          onClick={() => setPurchaseViewMode('form')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            purchaseViewMode === 'form'
+                              ? 'bg-red-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Formulario
+                        </button>
+                      </div>
+                    </div>
+
+                    {purchaseViewMode === 'cards' ? (
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-8">
+                        <div className="xl:col-span-2">
+                          <PurchaseModuleCards
+                            onAdd={handleAddTransaction}
+                            prices={prices}
+                            products={products}
+                            onReloadProducts={reloadProducts}
+                          />
+                        </div>
+                        <div className="xl:col-span-1">
+                          <DataTable typeFilter="compra" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Compras" icon={ShoppingCart} color="red" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <PurchaseModule
                               onAdd={handleAddTransaction}
@@ -1163,7 +1218,8 @@ Ver consola para más detalles (F12)
                         <div className="lg:col-span-2">
                             <DataTable typeFilter="compra" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Compras" icon={ShoppingCart} color="red" />
                         </div>
-                    </div>
+                      </div>
+                    )}
                     </TabsContent>
 
                     <TabsContent value="publicidad" className="mt-0 focus-visible:outline-none">
@@ -1178,12 +1234,58 @@ Ver consola para más detalles (F12)
                     </TabsContent>
 
                     <TabsContent value="ventas" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+                    {/* Toggle modo tarjetas vs formulario */}
+                    <div className="flex items-center justify-end gap-2 mb-4">
+                      <span className="text-xs text-gray-500">Modo:</span>
+                      <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
+                        <button
+                          onClick={() => setSalesViewMode('cards')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            salesViewMode === 'cards'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Tarjetas
+                        </button>
+                        <button
+                          onClick={() => setSalesViewMode('form')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            salesViewMode === 'form'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Formulario
+                        </button>
+                      </div>
+                    </div>
+
+                    {salesViewMode === 'cards' ? (
+                      /* MODO TARJETAS - Nuevo */
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-8">
+                        <div className="xl:col-span-2">
+                          <SalesModuleCards
+                            onAdd={handleAddTransaction}
+                            inventoryMap={inventoryMap}
+                            campaigns={campaigns}
+                            prices={prices}
+                            products={products}
+                            onReloadProducts={reloadProducts}
+                          />
+                        </div>
+                        <div className="xl:col-span-1">
+                          <DataTable typeFilter="venta" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Ventas" icon={Receipt} color="green" />
+                        </div>
+                      </div>
+                    ) : (
+                      /* MODO FORMULARIO - Original */
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
-                            <SalesModule 
-                              onAdd={handleAddTransaction} 
-                              inventoryMap={inventoryMap} 
-                              campaigns={campaigns} 
+                            <SalesModule
+                              onAdd={handleAddTransaction}
+                              inventoryMap={inventoryMap}
+                              campaigns={campaigns}
                               prices={prices}
                               products={Array.from(new Set(transactions.map(t => t.productName || t.productName).filter(Boolean)))}
                             />
@@ -1191,11 +1293,55 @@ Ver consola para más detalles (F12)
                         <div className="lg:col-span-2">
                             <DataTable typeFilter="venta" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Ventas" icon={Receipt} color="green" />
                         </div>
-                    </div>
+                      </div>
+                    )}
                     </TabsContent>
 
                     <TabsContent value="salidas" className="mt-0 focus-visible:outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+                    {/* Toggle modo tarjetas vs formulario */}
+                    <div className="flex items-center justify-end gap-2 mb-4">
+                      <span className="text-xs text-gray-500">Modo:</span>
+                      <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
+                        <button
+                          onClick={() => setExitViewMode('cards')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            exitViewMode === 'cards'
+                              ? 'bg-purple-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Tarjetas
+                        </button>
+                        <button
+                          onClick={() => setExitViewMode('form')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            exitViewMode === 'form'
+                              ? 'bg-purple-600 text-white'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Formulario
+                        </button>
+                      </div>
+                    </div>
+
+                    {exitViewMode === 'cards' ? (
+                      /* MODO TARJETAS - Nuevo */
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-8">
+                        <div className="xl:col-span-2">
+                          <ExitModuleCards
+                            onAdd={handleAddTransaction}
+                            products={products}
+                            onReloadProducts={reloadProducts}
+                          />
+                        </div>
+                        <div className="xl:col-span-1">
+                          <DataTable typeFilter="salidas" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Salidas" icon={Receipt} color="purple" />
+                        </div>
+                      </div>
+                    ) : (
+                      /* MODO FORMULARIO - Original */
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                         <div className="lg:col-span-1">
                             <ExitModule
                               onAdd={handleAddTransaction}
@@ -1207,7 +1353,8 @@ Ver consola para más detalles (F12)
                         <div className="lg:col-span-2">
                             <DataTable typeFilter="salidas" transactions={transactions} onDelete={handleDeleteTransaction} title="Historial de Salidas" icon={Receipt} color="blue" />
                         </div>
-                    </div>
+                      </div>
+                    )}
                     </TabsContent>
 
                     <TabsContent value="prestamos" className="mt-0 focus-visible:outline-none">

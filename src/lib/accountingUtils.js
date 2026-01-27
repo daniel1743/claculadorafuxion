@@ -6,23 +6,20 @@
 /**
  * Calcula el COGS (Costo de Mercancía Vendida) de una venta
  * @param {Object} saleTransaction - Transacción de venta
- * @param {number} saleTransaction.quantity_boxes - Cajas vendidas
- * @param {number} saleTransaction.quantity_sachets - Sobres vendidos
+ * @param {number} saleTransaction.quantity_boxes - Cajas vendidas (o quantityBoxes)
+ * @param {number} saleTransaction.quantity_sachets - Sobres vendidos (o quantitySachets)
  * @param {Object} product - Producto con PPP
- * @param {number} product.weighted_average_cost - Costo promedio ponderado
+ * @param {number} product.weighted_average_cost - Costo promedio ponderado (o weightedAverageCost)
  * @param {number} product.sachets_per_box - Sobres por caja (default 28)
  * @returns {number} COGS total
  */
 export const calculateCOGS = (saleTransaction, product) => {
-  const {
-    quantity_boxes = 0,
-    quantity_sachets = 0
-  } = saleTransaction;
+  // Soportar tanto snake_case como camelCase
+  const quantity_boxes = saleTransaction.quantity_boxes ?? saleTransaction.quantityBoxes ?? saleTransaction.quantity ?? 0;
+  const quantity_sachets = saleTransaction.quantity_sachets ?? saleTransaction.quantitySachets ?? 0;
 
-  const {
-    weighted_average_cost = 0,
-    sachets_per_box = 28
-  } = product;
+  const weighted_average_cost = product.weighted_average_cost ?? product.weightedAverageCost ?? 0;
+  const sachets_per_box = product.sachets_per_box ?? product.sachetsPerBox ?? 28;
 
   // COGS de cajas
   const cogsBoxes = (quantity_boxes || 0) * parseFloat(weighted_average_cost);
@@ -64,10 +61,12 @@ export const calculateRealProfit = (saleTransaction, product) => {
  * @returns {Object} { totalRevenue: number, totalCOGS: number, totalProfit: number, totalMargin: number }
  */
 export const calculateTotalProfit = (transactions, products, startDate = null, endDate = null) => {
-  // Crear mapa de productos por ID para acceso rápido
-  const productsMap = {};
+  // Crear mapas de productos por ID y por nombre para acceso rápido
+  const productsMapById = {};
+  const productsMapByName = {};
   products.forEach(p => {
-    productsMap[p.id] = p;
+    if (p.id) productsMapById[p.id] = p;
+    if (p.name) productsMapByName[p.name] = p;
   });
 
   let totalRevenue = 0;
@@ -76,24 +75,37 @@ export const calculateTotalProfit = (transactions, products, startDate = null, e
   // Filtrar transacciones de venta
   const sales = transactions.filter(t => {
     if (t.type !== 'sale' && t.type !== 'venta') return false;
-    
+
     if (startDate || endDate) {
       const tDate = new Date(t.created_at || t.date);
       if (startDate && tDate < startDate) return false;
       if (endDate && tDate > endDate) return false;
     }
-    
+
     return true;
   });
 
   // Calcular COGS y revenue por cada venta
   sales.forEach(sale => {
-    if (sale.product_id && productsMap[sale.product_id]) {
-      const product = productsMap[sale.product_id];
-      const revenue = parseFloat(sale.total_amount ?? sale.totalAmount) || 0;
-      const cogs = calculateCOGS(sale, product);
+    // Obtener ID y nombre del producto (soportar ambos formatos)
+    const productId = sale.product_id ?? sale.productId;
+    const productName = sale.product_name ?? sale.productName;
 
-      totalRevenue += revenue;
+    // Buscar producto por ID primero, luego por nombre
+    let product = null;
+    if (productId && productsMapById[productId]) {
+      product = productsMapById[productId];
+    } else if (productName && productsMapByName[productName]) {
+      product = productsMapByName[productName];
+    }
+
+    // Obtener el revenue de la venta
+    const revenue = parseFloat(sale.total_amount ?? sale.totalAmount ?? sale.total) || 0;
+    totalRevenue += revenue;
+
+    // Calcular COGS solo si encontramos el producto
+    if (product) {
+      const cogs = calculateCOGS(sale, product);
       totalCOGS += cogs;
     }
   });

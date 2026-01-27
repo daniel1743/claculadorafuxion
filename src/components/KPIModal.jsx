@@ -178,7 +178,7 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
         summary = { totalCampaigns: rows.length, totalInv: rows.reduce((a, b) => a + b.investment, 0) };
     }
     else if (type === 'profit') {
-        // Monthly breakdown
+        // Monthly breakdown - SOLO ingresos vs gastos MONETARIOS
         const monthMap = {};
         transactions.forEach(t => {
             const d = new Date(t.date);
@@ -189,12 +189,24 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
 
             const amount = t.total || t.totalAmount || 0;
             const isSale = t.type === 'venta' || t.type === 'sale';
+            // Solo contar gastos monetarios reales (compras, publicidad, delivery, outflow)
+            const isPurchase = t.type === 'compra' || t.type === 'purchase';
+            const isAd = t.type === 'publicidad' || t.type === 'advertising';
+            const isDelivery = t.type === 'delivery' ||
+                (t.type === 'outflow' && (t.notes || '').toLowerCase().match(/delivery|envío|envio|despacho/));
+            const isMonetaryExpense = isPurchase || isAd || isDelivery || t.type === 'outflow';
 
             if (isSale) {
                 monthMap[key].income += amount;
-            } else {
-                monthMap[key].expense += amount;
+            } else if (isMonetaryExpense) {
+                // No contar regalos como gasto
+                const notes = t.notes || '';
+                const isGift = (amount === 0 && notes.includes('REGALO')) || t.isGift === true;
+                if (!isGift) {
+                    monthMap[key].expense += amount;
+                }
             }
+            // personal_consumption, marketing_sample, box_opening NO son gastos monetarios
             monthMap[key].profit = monthMap[key].income - monthMap[key].expense;
         });
         rows = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
@@ -262,6 +274,32 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
         rows.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         summary = { totalProducts: rows.length, totalBoxes, totalSachets, totalMarketingSamples };
+    }
+    else if (type === 'fuxion_payments') {
+        // Mostrar mensaje que esta info viene de configuración
+        rows = [];
+        summary = { message: 'Los pagos FuXion se registran en la configuración del sistema.' };
+    }
+    else if (type === 'delivery') {
+        // Gastos de delivery/envío
+        let totalDelivery = 0;
+        transactions.forEach(t => {
+            const isDelivery = t.type === 'delivery' ||
+                (t.type === 'outflow' && (t.notes || '').toLowerCase().match(/delivery|envío|envio|despacho/));
+
+            if (isDelivery) {
+                const amount = t.total || t.totalAmount || 0;
+                rows.push({
+                    date: t.date,
+                    description: t.notes || t.description || 'Gasto de envío',
+                    amount: amount
+                });
+                totalDelivery += amount;
+            }
+        });
+        // Ordenar por fecha descendente
+        rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+        summary = { count: rows.length, total: totalDelivery };
     }
 
     return { rows, summary };
@@ -339,6 +377,25 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                         </div>
                     </>
                 )}
+                {type === 'delivery' && (
+                    <>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Total Envíos</div>
+                            <div className="text-2xl font-bold text-white">{modalData.summary.count || 0}</div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <div className="text-xs text-gray-400 uppercase">Gasto Total</div>
+                            <div className="text-2xl font-bold text-cyan-400">{formatCLP(modalData.summary.total || 0)}</div>
+                        </div>
+                    </>
+                )}
+                {type === 'fuxion_payments' && (
+                    <div className="col-span-full bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                        <div className="text-sm text-emerald-300">
+                            Los pagos FuXion (cheques, bonos) se configuran en la sección de ajustes del sistema y se suman automáticamente a la Ganancia Neta.
+                        </div>
+                    </div>
+                )}
             </div>
 
             <table className="w-full text-sm text-left">
@@ -384,6 +441,13 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                                 <th className="px-4 py-3 text-right">Cajas</th>
                                 <th className="px-4 py-3 text-right">Sobres</th>
                                 <th className="px-4 py-3 text-center rounded-tr-lg">Editar</th>
+                            </>
+                        )}
+                        {type === 'delivery' && (
+                             <>
+                                <th className="px-4 py-3 rounded-tl-lg">Fecha</th>
+                                <th className="px-4 py-3">Descripción</th>
+                                <th className="px-4 py-3 text-right rounded-tr-lg">Monto</th>
                             </>
                         )}
                     </tr>
@@ -515,6 +579,17 @@ const KPIModal = ({ isOpen, onClose, type, transactions, title, color, loans = [
                                                 <Pencil className="w-4 h-4" />
                                             </Button>
                                         )}
+                                    </td>
+                                </>
+                            )}
+                            {type === 'delivery' && (
+                                <>
+                                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">
+                                        {row.date ? new Date(row.date).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-white">{row.description}</td>
+                                    <td className="px-4 py-3 text-right text-cyan-400 font-mono font-bold">
+                                        {formatCLP(row.amount || 0)}
                                     </td>
                                 </>
                             )}

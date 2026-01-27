@@ -325,9 +325,34 @@ const DataTable = ({ transactions, onDelete, onDeleteMultiple, onEditAmount, typ
                           {t.campaignName}
                         </span>
                     )}
+                    {/* Badge para tipos de salida */}
+                    {t.type === 'personal_consumption' && (
+                        <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-900/30 text-purple-300 border border-purple-800/30">
+                          Consumo Personal
+                        </span>
+                    )}
+                    {t.type === 'marketing_sample' && (
+                        <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-900/30 text-yellow-300 border border-yellow-800/30">
+                          Muestra/Regalo
+                        </span>
+                    )}
+                    {t.type === 'box_opening' && (
+                        <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-900/30 text-orange-300 border border-orange-800/30">
+                          Apertura Caja
+                        </span>
+                    )}
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-right text-gray-300 font-mono">
-                    {t.quantity || '-'}
+                    {/* Mostrar cajas/sobres para salidas y compras con V2 */}
+                    {(t.type === 'personal_consumption' || t.type === 'marketing_sample' || t.type === 'box_opening') ? (
+                      <div className="text-xs">
+                        {t.quantityBoxes > 0 && <span className="block">{t.quantityBoxes} cajas</span>}
+                        {t.quantitySachets > 0 && <span className="block text-gray-500">{t.quantitySachets} sobres</span>}
+                        {!t.quantityBoxes && !t.quantitySachets && '-'}
+                      </div>
+                    ) : (
+                      t.quantity || t.quantityBoxes || '-'
+                    )}
                   </td>
                   <td className={`px-4 sm:px-6 py-4 text-right font-bold font-mono ${accentColor}`}>
                     {editingId === t.id ? (
