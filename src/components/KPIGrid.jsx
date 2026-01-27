@@ -1,9 +1,10 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid, User, Truck } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Target, Gift, Package, BarChart3, Megaphone, Banknote, Wallet, HandHeart, Star, FileText, ChevronDown, ChevronUp, LayoutGrid, User, Truck, PiggyBank, Receipt, TrendingDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricCard from '@/components/MetricCard';
 import KPIModal from '@/components/KPIModal';
+import DashboardSummary from '@/components/DashboardSummary';
 import { formatCLP } from '@/lib/utils';
 import { calculateTotalProfit } from '@/lib/accountingUtils';
 
@@ -110,28 +111,44 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       }
     });
 
-    // Calcular ganancia real usando COGS (solo si tenemos productos con PPP)
-    let netProfit, totalCOGS = 0;
+    // =====================================================
+    // MODELO CONTABLE CORRECTO (Implementación Final)
+    // =====================================================
+    // Principio: El dinero solo se gana/pierde cuando:
+    // - Un producto SALE del inventario (venta genera margen)
+    // - Hay un gasto operativo (publicidad, delivery, muestras mkt)
+    // - Hay un retiro del propietario (consumo personal)
+    // - Hay un ingreso extra (pagos FuXion)
+    //
+    // Las COMPRAS NO afectan ganancia (son conversión de activos)
+    // =====================================================
+
+    // 1. Calcular COGS y ganancia bruta de ventas
+    let totalCOGS = 0;
+    let grossProfit = 0; // Ganancia bruta = Ventas - COGS
+
     if (products && products.length > 0) {
-      // Usar cálculo real con COGS
       const profitData = calculateTotalProfit(transactions, products);
-      netProfit = profitData.totalProfit;
+      grossProfit = profitData.totalProfit; // Ya es Ventas - COGS
       totalCOGS = profitData.totalCOGS;
     } else {
-      // Fallback al cálculo antiguo si no hay productos
-      netProfit = totalSales - (totalPurchases + totalAds);
-    }
-    
-    // Ajustes ganancia neta para coherencia con gastos y escenarios sin ventas
-    if (products && products.length > 0) {
-      netProfit -= totalAds;
-    }
-    if (totalSales === 0 && (totalPurchases > 0 || totalAds > 0)) {
-      netProfit = -1 * (totalPurchases + totalAds);
+      // Fallback si no hay productos: solo ventas (sin COGS)
+      grossProfit = totalSales;
     }
 
-    // SUMAR PAGOS FUXION a la ganancia neta
-    netProfit += fuxionPayments;
+    // 2. Calcular gastos operativos (se calculan más adelante, inicializar aquí)
+    // totalAds ya está calculado arriba
+    // totalDeliveryExpenses se calcula más adelante
+    // marketingSamplesValue se calcula más adelante
+
+    // 3. Calcular retiros del propietario (consumo personal a PPP)
+    // Se calcula más adelante con personalConsumptionCost
+
+    // 4. La ganancia neta se calculará después de tener todos los valores
+    // netProfit = grossProfit - gastosOperativos - retiros + ingresos extra
+
+    // Capital recuperado = COGS (el costo de lo vendido, NO las ventas totales)
+    const capitalRecuperado = totalCOGS;
     
     // Calculate Free Product Profit using STORED PRICES
     // First, let's count free products available per product type to be accurate, 
@@ -230,12 +247,6 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       .slice(0, 3)
       .map(([label, qty]) => ({ label, value: `${qty} un.` }));
 
-    const profitPreview = [
-        { label: 'Ingresos', value: formatCLP(totalSales) },
-        { label: 'Gastos', value: formatCLP(totalPurchases + totalAds) },
-        { label: 'Margen', value: totalSales > 0 ? `${((netProfit/totalSales)*100).toFixed(1)}%` : '0%' }
-    ];
-
     Object.entries(campaigns).forEach(([name, data]) => {
       if (data.cost > 0) {
         const roi = ((data.revenue - data.cost) / data.cost) * 100;
@@ -327,13 +338,34 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       p.value = parts.join(' + ') || '0';
     });
 
-    // Calcular valor de consumo personal (a precio lista)
+    // Calcular valor de consumo personal a PRECIO LISTA (para mostrar al usuario)
     let personalConsumptionValue = 0;
+    // Calcular COSTO de consumo personal a PPP (para afectar ganancia - es un RETIRO)
+    let personalConsumptionCost = 0;
+
     consumptionByProduct.forEach(p => {
+      const product = products?.find(prod => prod.name === p.label);
       const listPrice = prices?.[p.label] || 0;
-      const sachetsPerBox = products?.find(prod => prod.name === p.label)?.sachetsPerBox || 28;
-      // Valor = (cajas * precio) + (sobres * precio/sachetsPerBox)
+      const ppp = product?.weightedAverageCost || product?.weighted_average_cost || 0;
+      const sachetsPerBox = product?.sachetsPerBox || product?.sachets_per_box || 28;
+
+      // Valor a precio lista (informativo)
       personalConsumptionValue += (p.boxes * listPrice) + (p.sachets * (listPrice / sachetsPerBox));
+      // Costo a PPP (afecta ganancia como retiro del propietario)
+      personalConsumptionCost += (p.boxes * ppp) + (p.sachets * (ppp / sachetsPerBox));
+    });
+
+    // Calcular COSTO de muestras de marketing a PPP (es un GASTO operativo)
+    let marketingSamplesCost = 0;
+    transactions.forEach(t => {
+      if (t.type === 'marketing_sample') {
+        const product = products?.find(prod => prod.name === t.productName);
+        const ppp = product?.weightedAverageCost || product?.weighted_average_cost || 0;
+        const sachetsPerBox = product?.sachetsPerBox || product?.sachets_per_box || 28;
+        const boxes = t.quantityBoxes || 0;
+        const sachets = t.quantitySachets || 0;
+        marketingSamplesCost += (boxes * ppp) + (sachets * (ppp / sachetsPerBox));
+      }
     });
 
     // NUEVO: Calcular préstamos totales
@@ -411,21 +443,69 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       });
 
     // Debug opcional para diagnstico de KPI
-    console.log('[KPIGrid] inversionCompras:', totalPurchases);
-    console.log('[KPIGrid] valorInventario:', totalInventoryValue);
-    console.log('[KPIGrid] inventoryMap:', inventoryMap);
-    console.log('[KPIGrid] prices keys:', Object.keys(prices || {}));
+    // =====================================================
+    // CÁLCULO FINAL DE GANANCIA NETA (Modelo Contable Correcto)
+    // =====================================================
+    const gastosOperativos = totalAds + totalDeliveryExpenses + marketingSamplesCost;
+    const retirosDelPropietario = personalConsumptionCost;
+    const ingresosExtra = fuxionPayments;
+
+    const netProfit = grossProfit - gastosOperativos - retirosDelPropietario + ingresosExtra;
+
+    // Valor del inventario a PPP (costo real)
+    let inventoryValueAtCost = 0;
+    if (products && products.length > 0) {
+      products.forEach(p => {
+        const stock = p.currentStockBoxes || p.current_stock_boxes || 0;
+        const ppp = p.weightedAverageCost || p.weighted_average_cost || 0;
+        inventoryValueAtCost += stock * ppp;
+      });
+    }
+
+    // Posición Neta del Negocio
+    const posicionNeta = capitalRecuperado + inventoryValueAtCost - totalPurchases - gastosOperativos - retirosDelPropietario + ingresosExtra;
+
+    // Margen bruto porcentual
+    const margenBruto = totalSales > 0 ? ((grossProfit / totalSales) * 100) : 0;
+
+    // Preview actualizado
+    const profitPreview = [
+      { label: 'Ventas', value: formatCLP(totalSales) },
+      { label: 'COGS', value: formatCLP(totalCOGS) },
+      { label: 'Gan. Bruta', value: formatCLP(grossProfit) },
+      { label: 'Gastos Op.', value: formatCLP(gastosOperativos) },
+      { label: 'Retiros', value: formatCLP(retirosDelPropietario) }
+    ];
+
+    // Debug
+    console.log('[KPIGrid] === MODELO CONTABLE ===');
+    console.log('[KPIGrid] Ganancia Bruta:', grossProfit, '| Gastos:', gastosOperativos, '| Retiros:', retirosDelPropietario);
+    console.log('[KPIGrid] GANANCIA NETA:', netProfit, '| Posicion Neta:', posicionNeta);
 
     return {
-      totalAds,
-      totalPurchases,
+      // Resultados operativos
       totalSales,
-      netProfit,
       totalCOGS,
+      grossProfit,
+      netProfit,
+      margenBruto,
+      gastosOperativos,
+      retirosDelPropietario,
+
+      // Capital
+      totalPurchases,
+      capitalRecuperado,
+      totalInventoryValue,
+      inventoryValueAtCost,
+      posicionNeta,
+
+      // Operaciones
+      totalAds,
+      totalDeliveryExpenses,
+      marketingSamplesCost,
       transactionCount,
       freeProducts,
       freeProductProfit: freeValueCalc,
-      totalInventoryValue,
       fuxionPayments,
       bestCampaign,
       campaignList,
@@ -440,102 +520,214 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
       totalPersonalConsumptionSachets,
       totalMarketingSamples,
       personalConsumptionValue,
+      personalConsumptionCost,
       consumptionByProduct,
-      totalDeliveryExpenses,
       deliveryByMonth,
       deliveryCount: deliveryTransactions.length
     };
   }, [transactions, inventoryMap, prices, products, loans, fuxionPayments]);
 
+  // Calcular datos para el resumen
+  const porcentajeRecuperado = metrics.totalPurchases > 0
+    ? (metrics.capitalRecuperado / metrics.totalPurchases) * 100
+    : 0;
+  const faltaPorRecuperar = Math.max(0, metrics.totalPurchases - metrics.capitalRecuperado - metrics.inventoryValueAtCost + metrics.gastosOperativos + metrics.retirosDelPropietario);
+  const margenPotencial = metrics.totalInventoryValue - metrics.inventoryValueAtCost;
+
   return (
     <>
-      {/* === TARJETAS PRINCIPALES (siempre visibles) === */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* 1. Ganancia Neta - LA MÁS IMPORTANTE */}
-        <MetricCard
-          title="Ganancia Neta"
-          value={metrics.netProfit >= 0
-            ? `+${formatCLP(metrics.netProfit)}`
-            : formatCLP(metrics.netProfit)}
-          icon={TrendingUp}
-          trend={metrics.netProfit >= 0
-            ? "✅ Has recuperado tu inversión"
-            : `❌ Faltan ${formatCLP(Math.abs(metrics.netProfit))} por recuperar`}
-          color={metrics.netProfit >= 0 ? "gold" : "red"}
-          delay={0}
-          hoverData={[
-            ...metrics.profitPreview,
-            ...(metrics.totalCOGS > 0 ? [{ label: 'COGS', value: formatCLP(metrics.totalCOGS) }] : []),
-            ...(metrics.fuxionPayments > 0 ? [{ label: 'Pagos FuXion', value: `+${formatCLP(metrics.fuxionPayments)}` }] : [])
-          ]}
-          onClick={() => handleCardClick('profit', 'Desglose de Ganancias', 'gold')}
-        />
+      {/* === RESUMEN EJECUTIVO "WOW" === */}
+      <DashboardSummary
+        inversionTotal={metrics.totalPurchases}
+        inventarioLista={metrics.totalInventoryValue}
+        inventarioCosto={metrics.inventoryValueAtCost}
+        capitalRecuperado={metrics.capitalRecuperado}
+        faltaPorRecuperar={Math.abs(metrics.posicionNeta)}
+        porcentajeRecuperado={porcentajeRecuperado}
+        margenPotencial={margenPotencial}
+      />
 
-        {/* 2. Inversión Compras */}
-        <MetricCard
-          title="Inversión Compras"
-          value={formatCLP(metrics.totalPurchases)}
-          icon={ShoppingBag}
-          trend="Costo Mercancía"
-          color="red"
-          delay={0.05}
-          onClick={() => handleCardClick('purchases', 'Historial de Compras', 'red')}
-          hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'compra' || t.type === 'purchase').length}]}
-        />
+      {/* === SECCIÓN 1: ¿CÓMO VOY? (Resultados) === */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">¿Cómo me fue?</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Vendí */}
+          <MetricCard
+            title="Vendí"
+            value={formatCLP(metrics.totalSales)}
+            icon={DollarSign}
+            trend={metrics.grossProfit >= 0
+              ? `Ganancia: ${formatCLP(metrics.grossProfit)}`
+              : `Pérdida: ${formatCLP(metrics.grossProfit)}`}
+            color="green"
+            delay={0}
+            onClick={() => handleCardClick('sales', 'Historial de Ventas', 'green')}
+            hoverData={[
+              { label: 'Ganancia Bruta', value: formatCLP(metrics.grossProfit) },
+              { label: 'Costo (COGS)', value: formatCLP(metrics.totalCOGS) },
+              { label: 'Margen', value: `${metrics.margenBruto?.toFixed(1) || 0}%` }
+            ]}
+          />
 
-        {/* 3. Ventas Totales */}
-        <MetricCard
-          title="Ventas Totales"
-          value={formatCLP(metrics.totalSales)}
-          icon={DollarSign}
-          trend="Ingresos Brutos"
-          color="green"
-          delay={0.1}
-          onClick={() => handleCardClick('sales', 'Historial de Ventas', 'green')}
-          hoverData={[{label: 'Transacciones', value: transactions.filter(t => t.type === 'venta' || t.type === 'sale').length}]}
-        />
+          {/* Gasté */}
+          <MetricCard
+            title="Gasté"
+            value={formatCLP(metrics.gastosOperativos)}
+            icon={Receipt}
+            trend={metrics.totalAds > 0 ? `Publicidad: ${formatCLP(metrics.totalAds)}` : "Sin gastos operativos"}
+            color="red"
+            delay={0.05}
+            onClick={() => handleCardClick('ads', 'Desglose de Gastos', 'red')}
+            hoverData={[
+              { label: 'Publicidad', value: formatCLP(metrics.totalAds) },
+              { label: 'Delivery', value: formatCLP(metrics.totalDeliveryExpenses) },
+              { label: 'Muestras Mkt', value: formatCLP(metrics.marketingSamplesCost || 0) }
+            ]}
+          />
 
-        {/* 4. Botón Ver Más Métricas */}
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.15 }}
-          onClick={() => setShowAllCards(!showAllCards)}
-          className={`
-            relative overflow-hidden rounded-2xl p-5
-            border transition-all duration-300 cursor-pointer
-            ${showAllCards
-              ? 'bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/40 shadow-lg shadow-yellow-500/10'
-              : 'bg-gray-900/60 border-white/10 hover:border-yellow-500/30 hover:bg-gray-900/80'
-            }
-          `}
-        >
-          <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-3">
-            <div className={`
-              p-3 rounded-xl transition-colors duration-300
-              ${showAllCards ? 'bg-yellow-500/20' : 'bg-white/5'}
-            `}>
-              <LayoutGrid className={`w-6 h-6 ${showAllCards ? 'text-yellow-400' : 'text-gray-400'}`} />
-            </div>
-            <div className="text-center">
-              <p className={`font-bold ${showAllCards ? 'text-yellow-400' : 'text-gray-300'}`}>
-                {showAllCards ? 'Ocultar Métricas' : 'Ver Todas las Métricas'}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {showAllCards ? 'Mostrar solo principales' : '+10 indicadores disponibles'}
-              </p>
-            </div>
-            <motion.div
-              animate={{ rotate: showAllCards ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ChevronDown className={`w-5 h-5 ${showAllCards ? 'text-yellow-400' : 'text-gray-500'}`} />
-            </motion.div>
-          </div>
-        </motion.button>
+          {/* Consumí */}
+          <MetricCard
+            title="Consumí"
+            value={metrics.totalPersonalConsumptionBoxes > 0
+              ? `${metrics.totalPersonalConsumptionBoxes} cajas`
+              : "0 cajas"}
+            icon={User}
+            trend={metrics.personalConsumptionCost > 0
+              ? `Costo: ${formatCLP(metrics.personalConsumptionCost)}`
+              : "Sin consumo propio"}
+            color="violet"
+            delay={0.1}
+            onClick={() => handleCardClick('personal_consumption', 'Mi Consumo Personal', 'violet')}
+            hoverData={[
+              { label: 'Costo (PPP)', value: formatCLP(metrics.personalConsumptionCost) },
+              { label: 'Valor Lista', value: formatCLP(metrics.personalConsumptionValue) },
+              ...(metrics.totalPersonalConsumptionSachets > 0 ? [{ label: 'Sobres', value: `${metrics.totalPersonalConsumptionSachets}` }] : [])
+            ]}
+          />
+
+          {/* Resultado */}
+          <MetricCard
+            title="Resultado"
+            value={metrics.netProfit >= 0
+              ? `+${formatCLP(metrics.netProfit)}`
+              : formatCLP(metrics.netProfit)}
+            icon={metrics.netProfit >= 0 ? TrendingUp : TrendingDown}
+            trend={metrics.netProfit >= 0
+              ? "Ganancia operativa"
+              : "Normal al inicio"}
+            color={metrics.netProfit >= 0 ? "gold" : "orange"}
+            delay={0.15}
+            onClick={() => handleCardClick('profit', 'Desglose de Resultado', 'gold')}
+            hoverData={[
+              ...metrics.profitPreview,
+              ...(metrics.fuxionPayments > 0 ? [{ label: 'Pagos FuXion', value: `+${formatCLP(metrics.fuxionPayments)}` }] : [])
+            ]}
+          />
+        </div>
       </div>
 
-      {/* === TARJETAS EXPANDIBLES (solo cuando showAllCards es true) === */}
+      {/* === SECCIÓN 2: ¿DÓNDE ESTÁ MI DINERO? (Capital) === */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <PiggyBank className="w-5 h-5 text-blue-400" />
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">¿Dónde está mi dinero?</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Invertí */}
+          <MetricCard
+            title="Invertí"
+            value={formatCLP(metrics.totalPurchases)}
+            icon={ShoppingBag}
+            trend="Total en compras"
+            color="blue"
+            delay={0}
+            onClick={() => handleCardClick('purchases', 'Historial de Compras', 'blue')}
+            hoverData={[
+              { label: 'Total Compras', value: formatCLP(metrics.totalPurchases) },
+              { label: '% Recuperado', value: `${porcentajeRecuperado.toFixed(1)}%` }
+            ]}
+          />
+
+          {/* Recuperé */}
+          <MetricCard
+            title="Recuperé"
+            value={formatCLP(metrics.capitalRecuperado)}
+            icon={DollarSign}
+            trend={`${porcentajeRecuperado.toFixed(1)}% de la inversión`}
+            color="emerald"
+            delay={0.05}
+            hoverData={[
+              { label: 'Costo de lo vendido', value: formatCLP(metrics.totalCOGS) },
+              { label: 'Es el COGS acumulado', value: 'Sí' }
+            ]}
+          />
+
+          {/* Tengo (Inventario) */}
+          <MetricCard
+            title="Tengo en Stock"
+            value={`${inventory} cajas`}
+            icon={Package}
+            trend={`Valor venta: ${formatCLP(metrics.totalInventoryValue)}`}
+            color="cyan"
+            delay={0.1}
+            onClick={() => handleCardClick('inventory', 'Inventario Detallado', 'cyan')}
+            hoverData={[
+              { label: 'Precio Venta', value: formatCLP(metrics.totalInventoryValue) },
+              { label: 'Costo (PPP)', value: formatCLP(metrics.inventoryValueAtCost) },
+              { label: 'Margen Potencial', value: formatCLP(margenPotencial) }
+            ]}
+          />
+
+          {/* Regalos Recibidos */}
+          <MetricCard
+            title="Regalos FuXion"
+            value={formatCLP(metrics.freeProductProfit)}
+            icon={Gift}
+            trend="Bonificaciones recibidas"
+            color="purple"
+            delay={0.15}
+            onClick={() => handleCardClick('inventory', 'Bonificaciones', 'purple')}
+            hoverData={[
+              { label: 'Valor en productos', value: formatCLP(metrics.freeProductProfit) },
+              { label: 'No te costaron', value: '$0' }
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* === BOTÓN VER MÁS === */}
+      <motion.button
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        onClick={() => setShowAllCards(!showAllCards)}
+        className={`
+          w-full relative overflow-hidden rounded-xl p-4 mb-6
+          border transition-all duration-300 cursor-pointer
+          ${showAllCards
+            ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-yellow-500/30'
+            : 'bg-gray-900/40 border-white/5 hover:border-white/20'
+          }
+        `}
+      >
+        <div className="flex items-center justify-center gap-3">
+          <LayoutGrid className={`w-5 h-5 ${showAllCards ? 'text-yellow-400' : 'text-gray-500'}`} />
+          <span className={`font-medium ${showAllCards ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {showAllCards ? 'Ocultar métricas adicionales' : '¿Hay algo que vigilar? Ver más métricas'}
+          </span>
+          <motion.div
+            animate={{ rotate: showAllCards ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ChevronDown className={`w-5 h-5 ${showAllCards ? 'text-yellow-400' : 'text-gray-500'}`} />
+          </motion.div>
+        </div>
+      </motion.button>
+
+      {/* === SECCIÓN 3: MÉTRICAS ADICIONALES (expandible) === */}
       <AnimatePresence>
         {showAllCards && (
           <motion.div
@@ -545,118 +737,77 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
             transition={{ duration: 0.4, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mt-5 pt-5 border-t border-white/5">
+            <div className="flex items-center gap-2 mb-4">
+              <Target className="w-5 h-5 text-orange-400" />
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Control y Vigilancia</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 pb-4">
+              {/* Publicidad */}
               <MetricCard
-                title="Gasto Publicidad"
-                value={formatCLP(metrics.totalAds)}
+                title="Publicidad"
+                value={metrics.totalAds > 0 ? formatCLP(metrics.totalAds) : "$0"}
                 icon={Megaphone}
-                trend="Inversión Total"
-                color="red"
+                trend={metrics.totalAds > 0
+                  ? (metrics.campaignList.length > 0 ? `${metrics.campaignList.length} campañas` : "Inversión en ads")
+                  : "Sin gastos aún"}
+                color={metrics.totalAds > 0 ? "red" : "gray"}
                 delay={0}
-                hoverData={metrics.campaignList}
+                hoverData={metrics.campaignList.length > 0 ? metrics.campaignList : [{ label: 'Sin campañas', value: '-' }]}
                 onClick={() => handleCardClick('ads', 'Análisis de Campañas', 'red')}
               />
+
+              {/* Delivery */}
               <MetricCard
-                title="Inventario Disponible"
-                value={inventory}
-                icon={Package}
-                trend="Stock Actual"
-                color="blue"
-                delay={0.05}
-                hoverData={metrics.productList}
-                onClick={() => handleCardClick('inventory', 'Inventario Detallado', 'blue')}
-              />
-              <MetricCard
-                title="Valor Inventario"
-                value={formatCLP(metrics.totalInventoryValue)}
-                icon={Wallet}
-                trend="Precio de Venta"
-                color="green"
-                delay={0.1}
-                onClick={() => handleCardClick('inventory', 'Valorización', 'green')}
-              />
-              <MetricCard
-                title="Pagos FuXion"
-                value={formatCLP(metrics.fuxionPayments)}
-                icon={Banknote}
-                trend="Cheques y Bonos"
-                color="emerald"
-                delay={0.15}
-                hoverData={metrics.fuxionPayments > 0 ? [{ label: 'Suma a Ganancia Neta', value: 'Sí' }] : []}
-                onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
-              />
-              {/* REEMPLAZADO: Tarjeta Mejor Campaña por Gastos de Delivery */}
-              <MetricCard
-                title="Gastos de Delivery"
-                value={formatCLP(metrics.totalDeliveryExpenses)}
+                title="Delivery"
+                value={metrics.totalDeliveryExpenses > 0 ? formatCLP(metrics.totalDeliveryExpenses) : "$0"}
                 icon={Truck}
-                trend={metrics.deliveryCount > 0 ? `${metrics.deliveryCount} envíos` : "Sin envíos"}
-                color="cyan"
-                delay={0.2}
-                hoverData={metrics.deliveryByMonth.length > 0 ? metrics.deliveryByMonth : [{ label: 'Sin datos', value: '-' }]}
+                trend={metrics.totalDeliveryExpenses > 0 ? `${metrics.deliveryCount} envíos` : "Sin envíos aún"}
+                color={metrics.totalDeliveryExpenses > 0 ? "cyan" : "gray"}
+                delay={0.05}
+                hoverData={metrics.deliveryByMonth.length > 0 ? metrics.deliveryByMonth : [{ label: 'Sin registros', value: '-' }]}
                 onClick={() => handleCardClick('delivery', 'Gastos de Delivery', 'cyan')}
               />
-              {/* COMENTADO: Tarjeta Puntos Acumulados
+
+              {/* Préstamos */}
               <MetricCard
-                title="Puntos Acumulados"
-                value={metrics.totalPoints.toLocaleString()}
-                icon={Star}
-                trend="Puntos FuXion"
-                color="purple"
-                delay={0.25}
-                hoverData={metrics.pointsByProduct.slice(0, 3)}
-                onClick={() => handleCardClick('inventory', 'Puntos por Producto', 'purple')}
-              />
-              */}
-              <MetricCard
-                title="Valor Prod. Gratis"
-                value={formatCLP(metrics.freeProductProfit)}
-                icon={Gift}
-                trend="Ganancia Estimada"
-                color="purple"
-                delay={0.3}
-                onClick={() => handleCardClick('inventory', 'Valorización Stock', 'purple')}
-              />
-              <MetricCard
-                title="Préstamos Activos"
-                value={metrics.totalLoanedBoxes}
+                title="Préstamos"
+                value={metrics.totalLoanedBoxes > 0 ? `${metrics.totalLoanedBoxes} cajas` : "0 cajas"}
                 icon={HandHeart}
-                trend="Unidades Prestadas"
-                color="orange"
-                delay={0.35}
-                hoverData={[
-                  ...(metrics.totalLoanedValue > 0 ? [{ label: 'Valor Estimado', value: formatCLP(metrics.totalLoanedValue) }] : []),
-                  ...metrics.loansByProduct.slice(0, 3)
-                ]}
+                trend={metrics.totalLoanedBoxes > 0 ? "Pendientes de devolver" : "Sin préstamos activos"}
+                color={metrics.totalLoanedBoxes > 0 ? "orange" : "gray"}
+                delay={0.1}
+                hoverData={metrics.loansByProduct.length > 0
+                  ? [{ label: 'Valor', value: formatCLP(metrics.totalLoanedValue) }, ...metrics.loansByProduct.slice(0, 3)]
+                  : [{ label: 'Sin préstamos', value: '-' }]}
                 onClick={() => handleCardClick('loans', 'Préstamos Detallados', 'orange')}
               />
+
+              {/* Pagos FuXion */}
               <MetricCard
-                title="Consumo Personal"
-                value={`${metrics.totalPersonalConsumptionBoxes} cajas`}
-                icon={User}
-                trend={metrics.personalConsumptionValue > 0
-                  ? `Valor: ${formatCLP(metrics.personalConsumptionValue)}`
-                  : (metrics.totalPersonalConsumptionSachets > 0 ? `+ ${metrics.totalPersonalConsumptionSachets} sobres` : "Tu consumo propio")}
-                color="violet"
-                delay={0.4}
-                hoverData={[
-                  ...(metrics.totalPersonalConsumptionSachets > 0 ? [{ label: 'Sobres consumidos', value: `${metrics.totalPersonalConsumptionSachets} sobres` }] : []),
-                  ...(metrics.totalMarketingSamples > 0 ? [{ label: 'Muestras/Regalos', value: `${metrics.totalMarketingSamples} sobres` }] : []),
-                  ...metrics.consumptionByProduct.slice(0, 3)
-                ]}
-                onClick={() => handleCardClick('personal_consumption', 'Consumo Personal', 'violet')}
+                title="Pagos FuXion"
+                value={metrics.fuxionPayments > 0 ? formatCLP(metrics.fuxionPayments) : "$0"}
+                icon={Banknote}
+                trend={metrics.fuxionPayments > 0 ? "Cheques y Bonos" : "Sin pagos aún"}
+                color={metrics.fuxionPayments > 0 ? "emerald" : "gray"}
+                delay={0.15}
+                hoverData={metrics.fuxionPayments > 0
+                  ? [{ label: 'Suma al Resultado', value: 'Sí' }]
+                  : [{ label: 'Pendiente', value: '-' }]}
+                onClick={() => handleCardClick('fuxion_payments', 'Pagos FuXion', 'emerald')}
               />
+
+              {/* Estado del Negocio */}
               <MetricCard
-                title="Estado del Negocio"
+                title="Reporte Completo"
                 value="Ver Resumen"
                 icon={FileText}
-                trend="Reporte Ejecutivo"
+                trend="Estado del Negocio"
                 color="yellow"
                 isText
-                delay={0.4}
+                delay={0.2}
                 hoverData={[
-                  { label: 'Ganancia Neta', value: formatCLP(metrics.netProfit) },
-                  { label: 'Valor Inventario', value: formatCLP(metrics.totalInventoryValue) }
+                  { label: 'Resultado', value: formatCLP(metrics.netProfit) },
+                  { label: 'Posición Neta', value: formatCLP(metrics.posicionNeta) }
                 ]}
                 onClick={onEstadoNegocioClick}
               />
