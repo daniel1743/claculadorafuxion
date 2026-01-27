@@ -454,9 +454,13 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
         {/* 1. Ganancia Neta - LA MÁS IMPORTANTE */}
         <MetricCard
           title="Ganancia Neta"
-          value={formatCLP(metrics.netProfit)}
+          value={metrics.netProfit >= 0
+            ? `+${formatCLP(metrics.netProfit)}`
+            : formatCLP(metrics.netProfit)}
           icon={TrendingUp}
-          trend={metrics.netProfit >= 0 ? "Rentabilidad Positiva" : "Rentabilidad Negativa"}
+          trend={metrics.netProfit >= 0
+            ? "✅ Has recuperado tu inversión"
+            : `❌ Faltan ${formatCLP(Math.abs(metrics.netProfit))} por recuperar`}
           color={metrics.netProfit >= 0 ? "gold" : "red"}
           delay={0}
           hoverData={[
