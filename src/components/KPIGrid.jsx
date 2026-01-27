@@ -630,11 +630,13 @@ const KPIGrid = ({ transactions, inventory, inventoryMap, prices, products = [],
                 title="Consumo Personal"
                 value={`${metrics.totalPersonalConsumptionBoxes} cajas`}
                 icon={User}
-                trend={metrics.totalPersonalConsumptionSachets > 0 ? `+ ${metrics.totalPersonalConsumptionSachets} sobres` : "Tu consumo propio"}
+                trend={metrics.personalConsumptionValue > 0
+                  ? `Valor: ${formatCLP(metrics.personalConsumptionValue)}`
+                  : (metrics.totalPersonalConsumptionSachets > 0 ? `+ ${metrics.totalPersonalConsumptionSachets} sobres` : "Tu consumo propio")}
                 color="violet"
                 delay={0.4}
                 hoverData={[
-                  ...(metrics.personalConsumptionValue > 0 ? [{ label: 'Valor Consumido', value: formatCLP(metrics.personalConsumptionValue) }] : []),
+                  ...(metrics.totalPersonalConsumptionSachets > 0 ? [{ label: 'Sobres consumidos', value: `${metrics.totalPersonalConsumptionSachets} sobres` }] : []),
                   ...(metrics.totalMarketingSamples > 0 ? [{ label: 'Muestras/Regalos', value: `${metrics.totalMarketingSamples} sobres` }] : []),
                   ...metrics.consumptionByProduct.slice(0, 3)
                 ]}

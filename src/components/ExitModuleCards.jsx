@@ -53,11 +53,12 @@ const ExitModuleCards = ({
       .map(([productId, quantity]) => {
         const product = products.find(p => p.id === productId);
         if (!product) return null;
+        const unitPrice = product.list_price ?? product.listPrice ?? 0;
         return {
           product,
           quantity,
-          unitPrice: 0, // Salidas no tienen precio
-          subtotal: 0
+          unitPrice,
+          subtotal: quantity * unitPrice
         };
       })
       .filter(Boolean);
@@ -66,6 +67,11 @@ const ExitModuleCards = ({
   // Total de unidades
   const totalUnidades = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cartItems]);
+
+  // Valor total de los productos (para referencia)
+  const valorTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.subtotal, 0);
   }, [cartItems]);
 
   // Handlers (soportar ambos formatos de stock)
@@ -307,7 +313,17 @@ const ExitModuleCards = ({
           totalLabel="Total Unidades"
           confirmLabel={currentConfig.confirmLabel}
           isLoading={isLoading}
-          showPrices={false}
+          showPrices={true}
+          extraContent={
+            valorTotal > 0 && (
+              <div className={`flex items-center justify-between py-2 px-1 rounded-lg ${exitType === 'personal_consumption' ? 'bg-purple-500/10' : 'bg-yellow-500/10'}`}>
+                <span className="text-gray-400 text-sm">Valor de productos:</span>
+                <span className={`text-lg font-bold font-mono ${exitType === 'personal_consumption' ? 'text-purple-400' : 'text-yellow-400'}`}>
+                  {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(valorTotal)}
+                </span>
+              </div>
+            )
+          }
         />
       </div>
     </motion.div>
